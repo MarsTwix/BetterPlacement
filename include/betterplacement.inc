@@ -10,8 +10,17 @@
 * @param model              For example 'models\props\cs_office\radio.mdl' or 'chicken', as long as it is valid.
 * @param height             The height that will be added to the position of the entity, to avoid blockage on floor.
 * @param alpha              The Alpha/Transparency of the fake entity, the number should be between 0 and 255.
+* @param EntityTargetName   The target name of the entity it is going to save, to distinguish between plugins. (Recommended to use the name of the plugin)
 */
-native void BetterPlacement(int client, char model[PLATFORM_MAX_PATH], float height, int alpha);
+native void BetterPlacement(int client, char model[PLATFORM_MAX_PATH], float height, int alpha, char EntityTargetName[64]);
+
+/**
+* Checks if the target names are equal.
+*
+* @param client             Client index.
+* @param TargetName         The target name is is going to check with.
+*/
+native bool HasTargetName(int client, char TargetName[64]);
 
 /**
 * Gets called before DispatchSpawn() gets called of the fake entity.

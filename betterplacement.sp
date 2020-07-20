@@ -26,7 +26,7 @@ GlobalForward g_fwEntitySpawn = null;
 
 public Plugin myinfo =
 {
-    name = "radio placement",
+    name = "Better Placement",
     author = "MarsTwix",
     description = "This is a GUI to better place entities.",
     version = "1.0.0",
@@ -42,6 +42,7 @@ public void OnPluginStart()
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
     CreateNative("BetterPlacement", Native_BetterPlacement);
+    CreateNative("HasTargetName", Native_HasTargetName);
 
     g_fwPreFakeEntitySpawn = new GlobalForward("PreFakeEntitySpawn", ET_Ignore, Param_Cell, Param_Cell);
     g_fwFakeEntitySpawn = new GlobalForward("FakeEntitySpawn", ET_Ignore, Param_Cell, Param_Cell);
@@ -106,8 +107,27 @@ public int Native_BetterPlacement(Handle plugin, int numParams)
     {
         g_iPlayer[client].alpha = AlphaNum;
     }
+
+    char TargetName[64];
+    GetNativeString(5, TargetName, sizeof(TargetName));
+    g_iPlayer[client].EntityTargetName = TargetName;
     CreateFakeEntity(client);
     return 0;
+}
+
+public int Native_HasTargetName(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    char TargetName[64];
+    GetNativeString(2, TargetName, sizeof(TargetName));
+    if (StrEqual(TargetName, g_iPlayer[client].EntityTargetName))
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 Action CreateFakeEntity(int client)
