@@ -2,6 +2,10 @@
 #include <sdktools>
 #include <sdkhooks>
 
+#define SND_Placing "buttons/button9.wav"
+#define SND_Blocked "buttons/weapon_cant_buy.wav"
+#define SND_Cancel "buttons/combine_button7.wav"
+
 enum struct PlayerData
 {
     int ClientsRadio;
@@ -9,6 +13,8 @@ enum struct PlayerData
     bool active;
     bool EntityBlocked;
     bool DistanceBlocked;
+    bool BlockedPlacing;
+    bool CancelPlacing;
 
     char model[PLATFORM_MAX_PATH];
     char EntityTargetName[64];
@@ -35,8 +41,16 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-    RegConsoleCmd("sm_betterplacement", Command_BetterPlacement, "You can spawn an entity");
+    RegAdminCmd("sm_betterplacement", Command_BetterPlacement, ADMFLAG_GENERIC, "You can spawn an entity");
     HookEvent("player_death", Event_PlayerDeath);
+}
+
+public void OnPluginEnd()
+{
+    for(int i = 1; i <= MaxClients; i++)
+    {
+        RemoveFakeEntity(i);
+    }
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -51,9 +65,15 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
     return APLRes_Success;
 }
 
+public void OnMapStart()
+{
+    PrecacheSound(SND_Placing);
+    PrecacheSound(SND_Blocked);
+    PrecacheSound(SND_Cancel);
+}
 Action Command_BetterPlacement(int client, int args)
 {
-    if(args == 2)
+    if(args == 3)
     {
         char arg1[PLATFORM_MAX_PATH];
         GetCmdArg(1, arg1, sizeof(arg1));
@@ -77,7 +97,7 @@ Action Command_BetterPlacement(int client, int args)
     }
     else
     {
-        PrintToChat(client, "Usage: sm_spawnentity (modelname) (height of entity) (alpha/transparency)");
+        PrintToChat(client, "Usage: sm_betterplacement (modelname) (height of entity) (alpha/transparency)");
         return Plugin_Handled;
     }
 }
@@ -195,11 +215,13 @@ void CreateEntity(int client)
 {
     if (g_iPlayer[client].EntityBlocked == true)
     {
-        PrintHintText(client, "You can't place the radio there, because it is in something!");
+        PrintHintText(client, "You can't place the entity there, because it is in something!");
+        EmitSoundToClient(client, SND_Blocked);
     }
     else if(g_iPlayer[client].DistanceBlocked == true)
     {
-        PrintHintText(client, "You can't place the radio there, because it is too far away!");
+        PrintHintText(client, "You can't place the entity there, because it is too far away!");
+        EmitSoundToClient(client, SND_Blocked);
     }
     else
     {
@@ -241,8 +263,9 @@ void CreateEntity(int client)
         DispatchSpawn(entity);
 
         RemoveEntity(g_iPlayer[client].ClientsRadio);
-        PrintHintText(client, "");
         TeleportEntity(entity, EntityPos, angle, NULL_VECTOR);
+        PrintHintText(client, "You've placed the entity!");
+        EmitSoundToClient(client, SND_Placing);
 
         Call_StartForward(g_fwEntitySpawn);
         Call_PushCell(entity);
@@ -254,14 +277,29 @@ void CreateEntity(int client)
 
 public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon, int& subtype, int& cmdnum, int& tickcount, int& seed, int mouse[2])
 {
-    if(buttons == IN_USE && g_iPlayer[client].active == true)
+    if(buttons == IN_USE && g_iPlayer[client].active == true && g_iPlayer[client].BlockedPlacing == false)
     {
+        g_iPlayer[client].BlockedPlacing = true;
+        StopSound(client, SNDCHAN_AUTO, SND_Blocked);
         CreateEntity(client);
     }
-    if(buttons == IN_RELOAD && g_iPlayer[client].active == true)
+    else if(buttons != IN_USE && g_iPlayer[client].active == true && g_iPlayer[client].BlockedPlacing == true)
     {
-        RemoveFakeEntity(client);
+        g_iPlayer[client].BlockedPlacing = false;
     }
+
+    if(buttons == IN_RELOAD && g_iPlayer[client].active == true && g_iPlayer[client].CancelPlacing == false)
+    {
+        g_iPlayer[client].CancelPlacing = true;
+        RemoveFakeEntity(client);
+        StopSound(client, SNDCHAN_AUTO, SND_Cancel);
+        EmitSoundToClient(client, SND_Cancel);
+    }
+    else if(buttons != IN_RELOAD && g_iPlayer[client].active == true && g_iPlayer[client].CancelPlacing == true)
+    {
+        g_iPlayer[client].CancelPlacing = false;
+    }
+
 }
 
 public void OnGameFrame()
