@@ -12,7 +12,7 @@
 * @param alpha              The Alpha/Transparency of the fake entity, the number should be between 0 and 255.
 * @param EntityTargetName   The target name of the entity it is going to save, to distinguish between plugins. (Recommended to use the name of the plugin)
 */
-native void BetterPlacement(int client, char model[PLATFORM_MAX_PATH], float height, int alpha, char EntityTargetName[64]);
+native void BP_PlaceEntity(int client, char model[PLATFORM_MAX_PATH], float height, int alpha, char EntityTargetName[64]);
 
 /**
 * Checks if the target names are equal.
@@ -20,7 +20,7 @@ native void BetterPlacement(int client, char model[PLATFORM_MAX_PATH], float hei
 * @param client             Client index.
 * @param TargetName         The target name is is going to check with.
 */
-native bool HasTargetName(int client, char TargetName[64]);
+native bool BP_HasTargetName(int client, char TargetName[64]);
 
 /**
 * Gets called before DispatchSpawn() gets called of the fake entity.
@@ -28,7 +28,7 @@ native bool HasTargetName(int client, char TargetName[64]);
 * @param Entity             Entity index that's going to get spawned.
 * @param client             Client index of the entity.
 */
-forward void PreFakeEntitySpawn(int entity, int client);
+forward void BP_OnFakeEntitySpawnPre(int entity, int client);
 
 /**
 * Gets called after DispatchSpawn() gets called of the fake entity.
@@ -36,7 +36,7 @@ forward void PreFakeEntitySpawn(int entity, int client);
 * @param Entity             Entity index that's going to get spawned.
 * @param client             Client index of the entity.
 */
-forward void FakeEntitySpawn(int entity, int client);
+forward void BP_OnFakeEntitySpawn(int entity, int client);
 
 /**
 * Gets called before DispatchSpawn() gets called of the entity.
@@ -44,7 +44,7 @@ forward void FakeEntitySpawn(int entity, int client);
 * @param Entity             Entity index that's going to get spawned.
 * @param client             Client index of the entity.
 */
-forward void PreEntitySpawn(int entity, int client);
+forward void BP_OnEntitySpawnPre(int entity, int client);
 
 /**
 * Gets called after DispatchSpawn() gets called of the fake entity.
@@ -52,4 +52,4 @@ forward void PreEntitySpawn(int entity, int client);
 * @param Entity             Entity index that's going to get spawned.
 * @param client             Client index of the entity.
 */
-forward void EntitySpawn(int entity, int client, float EntityPosition[3]);
+forward void BP_OnEntitySpawn(int entity, int client, float EntityPosition[3]);

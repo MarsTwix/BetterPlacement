@@ -24,11 +24,11 @@ enum struct PlayerData
 
 PlayerData g_iPlayer[MAXPLAYERS+1];
 
-GlobalForward g_fwPreFakeEntitySpawn = null;
-GlobalForward g_fwFakeEntitySpawn = null;
+GlobalForward g_fwOnFakeEntitySpawnPre = null;
+GlobalForward g_fwOnFakeEntitySpawn = null;
 
-GlobalForward g_fwPreEntitySpawn = null;
-GlobalForward g_fwEntitySpawn = null;
+GlobalForward g_fwOnEntitySpawnPre = null;
+GlobalForward g_fwOnEntitySpawn = null;
 
 public Plugin myinfo =
 {
@@ -55,13 +55,13 @@ public void OnPluginEnd()
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-    CreateNative("BetterPlacement", Native_BetterPlacement);
-    CreateNative("HasTargetName", Native_HasTargetName);
+    CreateNative("BP_PlaceEntity", Native_PlaceEntity);
+    CreateNative("BP_HasTargetName", Native_HasTargetName);
 
-    g_fwPreFakeEntitySpawn = new GlobalForward("PreFakeEntitySpawn", ET_Ignore, Param_Cell, Param_Cell);
-    g_fwFakeEntitySpawn = new GlobalForward("FakeEntitySpawn", ET_Ignore, Param_Cell, Param_Cell);
-    g_fwPreEntitySpawn = new GlobalForward("PreEntitySpawn", ET_Ignore, Param_Cell, Param_Cell);
-    g_fwEntitySpawn = new GlobalForward("EntitySpawn", ET_Ignore, Param_Cell, Param_Cell, Param_Array);
+    g_fwOnFakeEntitySpawnPre = new GlobalForward("BP_OnFakeEntitySpawnPre", ET_Ignore, Param_Cell, Param_Cell);
+    g_fwOnFakeEntitySpawn = new GlobalForward("BP_OnFakeEntitySpawn", ET_Ignore, Param_Cell, Param_Cell);
+    g_fwOnEntitySpawnPre = new GlobalForward("BP_OnEntitySpawnPre", ET_Ignore, Param_Cell, Param_Cell);
+    g_fwOnEntitySpawn = new GlobalForward("BP_OnEntitySpawn", ET_Ignore, Param_Cell, Param_Cell, Param_Array);
     return APLRes_Success;
 }
 
@@ -102,7 +102,7 @@ Action Command_BetterPlacement(int client, int args)
     }
 }
 
-public int Native_BetterPlacement(Handle plugin, int numParams)
+public int Native_PlaceEntity(Handle plugin, int numParams)
 {
     int client = GetNativeCell(1);
 
@@ -193,7 +193,7 @@ Action CreateFakeEntity(int client)
 
         SDKHook(entity, SDKHook_SetTransmit, Hook_SetTransmit);
 
-        Call_StartForward(g_fwPreFakeEntitySpawn);
+        Call_StartForward(g_fwOnFakeEntitySpawnPre);
         Call_PushCell(entity);
         Call_PushCell(client);
         Call_Finish();
@@ -201,7 +201,7 @@ Action CreateFakeEntity(int client)
         DispatchSpawn(entity);
         TeleportEntity(entity, vector, NULL_VECTOR, NULL_VECTOR);
 
-        Call_StartForward(g_fwFakeEntitySpawn);
+        Call_StartForward(g_fwOnFakeEntitySpawn);
         Call_PushCell(entity);
         Call_PushCell(client);
         Call_Finish();
@@ -255,7 +255,7 @@ void CreateEntity(int client)
         EntityPos[2] += g_iPlayer[client].Vector2;
         angle = SetEntityAngle(client, angle);
 
-        Call_StartForward(g_fwPreEntitySpawn);
+        Call_StartForward(g_fwOnEntitySpawnPre);
         Call_PushCell(entity);
         Call_PushCell(client);
         Call_Finish();
@@ -267,7 +267,7 @@ void CreateEntity(int client)
         PrintHintText(client, "You've placed the entity!");
         EmitSoundToClient(client, SND_Placing);
 
-        Call_StartForward(g_fwEntitySpawn);
+        Call_StartForward(g_fwOnEntitySpawn);
         Call_PushCell(entity);
         Call_PushCell(client);
         Call_PushArray(EntityPos, 3);
