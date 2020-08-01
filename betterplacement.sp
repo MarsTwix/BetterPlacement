@@ -3,12 +3,15 @@
 #include <sdkhooks>
 
 #define SND_Placing "buttons/button9.wav"
+#define SND_Rotating "items/flashlight1.wav"
 #define SND_Blocked "buttons/weapon_cant_buy.wav"
 #define SND_Cancel "buttons/combine_button7.wav"
 
 enum struct PlayerData
 {
-    int ClientsRadio;
+    int ClientsEntity;
+    
+    float EntityRotation;
 
     bool active;
     bool EntityBlocked;
@@ -41,7 +44,8 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-    RegAdminCmd("sm_betterplacement", Command_BetterPlacement, ADMFLAG_GENERIC, "You can spawn an entity");
+    RegAdminCmd("sm_spawnprop", Command_SpawnProp, ADMFLAG_GENERIC, "You can spawn an entity");
+    AddCommandListener(Command_Rotation, "+lookatweapon");
     HookEvent("player_death", Event_PlayerDeath);
 }
 
@@ -68,10 +72,11 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 public void OnMapStart()
 {
     PrecacheSound(SND_Placing);
+    PrecacheSound(SND_Rotating);
     PrecacheSound(SND_Blocked);
     PrecacheSound(SND_Cancel);
 }
-Action Command_BetterPlacement(int client, int args)
+Action Command_SpawnProp(int client, int args)
 {
     if(args == 3)
     {
@@ -100,6 +105,23 @@ Action Command_BetterPlacement(int client, int args)
         PrintToChat(client, "Usage: sm_betterplacement (modelname) (height of entity) (alpha/transparency)");
         return Plugin_Handled;
     }
+}
+
+//rotation with inspect
+Action Command_Rotation(int client, const char[] command, int argc)
+{
+    if (g_iPlayer[client].active)
+    {
+        g_iPlayer[client].EntityRotation += 90;
+        EmitSoundToClient(client, SND_Rotating);
+
+        if (g_iPlayer[client].EntityRotation == 360)
+        {
+            g_iPlayer[client].EntityRotation = 0;
+        }
+        return Plugin_Handled;
+    }
+    return Plugin_Continue;
 }
 
 public int Native_PlaceEntity(Handle plugin, int numParams)
@@ -154,20 +176,26 @@ Action CreateFakeEntity(int client)
 {
     float vector[3];
     int entity;
+    char ClientModel[PLATFORM_MAX_PATH];
     if (StrContains(g_iPlayer[client].model, "/") != -1 || StrContains(g_iPlayer[client].model, "\\") != -1)
     {
-        if (StrContains(g_iPlayer[client].model, "models/") != -1 || StrContains(g_iPlayer[client].model, "models\\") != -1)
+        ClientModel = g_iPlayer[client].model;
+        if (StrContains(g_iPlayer[client].model, "models/") == -1 || StrContains(g_iPlayer[client].model, "models\\") == -1)
         {
-            entity = CreateEntityByName("prop_dynamic_override");
-            PrecacheModel(g_iPlayer[client].model);  
-            SetEntityModel(entity, g_iPlayer[client].model);
+            if (ClientModel[0] == '\\' || ClientModel[0] == '/')
+            {
+                Format(ClientModel, sizeof(ClientModel), "models%s", g_iPlayer[client].model);
+                g_iPlayer[client].model = ClientModel;
+            }
+            else
+            {
+                Format(ClientModel, sizeof(ClientModel), "models\\%s", g_iPlayer[client].model);
+                g_iPlayer[client].model = ClientModel;
+            }
         }
-
-        else
-        {
-            PrintToServer("couldn't spawn %s, because 'models/' or 'models\\' is forgotten at the front!", g_iPlayer[client].model)
-            return Plugin_Handled;
-        }
+        entity = CreateEntityByName("prop_dynamic_override");
+        PrecacheModel(g_iPlayer[client].model);  
+        SetEntityModel(entity, g_iPlayer[client].model);
     }
 
     else
@@ -182,7 +210,7 @@ Action CreateFakeEntity(int client)
     }
     else if (g_iPlayer[client].active == false)
     {
-        g_iPlayer[client].ClientsRadio = entity;
+        g_iPlayer[client].ClientsEntity = entity;
         g_iPlayer[client].active = true;
 
         GetAimCoords(client, vector);
@@ -245,7 +273,7 @@ void CreateEntity(int client)
 
         if (entity == -1)
         {
-            PrintToChat(client, "couldn't spawn {yellow}%s{default}!", g_iPlayer[client].model);
+            PrintToChat(client, "couldn't spawn %s!", g_iPlayer[client].model);
         }
 
         SetEntityRenderMode(entity, RENDER_TRANSCOLOR);
@@ -262,7 +290,7 @@ void CreateEntity(int client)
 
         DispatchSpawn(entity);
 
-        RemoveEntity(g_iPlayer[client].ClientsRadio);
+        RemoveEntity(g_iPlayer[client].ClientsEntity);
         TeleportEntity(entity, EntityPos, angle, NULL_VECTOR);
         PrintHintText(client, "You've placed the entity!");
         EmitSoundToClient(client, SND_Placing);
@@ -316,37 +344,36 @@ public void OnGameFrame()
 
             EntityAng = SetEntityAngle(i, EntityAng);
 
-            TeleportEntity(g_iPlayer[i].ClientsRadio, vector, EntityAng, NULL_VECTOR);
+            TeleportEntity(g_iPlayer[i].ClientsEntity, vector, EntityAng, NULL_VECTOR);
 
             float ClientPos[3];
             GetClientAbsOrigin(i, ClientPos);
             float distance = GetVectorDistance(vector, ClientPos);
             
-        
-
+            //FIX higher if vector 2 is higher than normal
             if (distance > 200.0)
             {
-                SetEntityRenderColor(g_iPlayer[i].ClientsRadio, 255, 165, 0, 200);
+                SetEntityRenderColor(g_iPlayer[i].ClientsEntity, 255, 165, 0, 200);
                 g_iPlayer[i].DistanceBlocked = true;
                 g_iPlayer[i].EntityBlocked = false;
             }
             
-            if (CheckIfEntityIsStuck(g_iPlayer[i].ClientsRadio))
+            if (CheckIfEntityIsStuck(g_iPlayer[i].ClientsEntity))
             {
-                SetEntityRenderColor(g_iPlayer[i].ClientsRadio, 255, 0, 0, 200);
+                SetEntityRenderColor(g_iPlayer[i].ClientsEntity, 255, 0, 0, 200);
                 g_iPlayer[i].EntityBlocked = true;
                 g_iPlayer[i].DistanceBlocked = false;
             }
-            else if(!CheckIfEntityIsStuck(g_iPlayer[i].ClientsRadio) && g_iPlayer[i].DistanceBlocked == false)
+            else if(!CheckIfEntityIsStuck(g_iPlayer[i].ClientsEntity) && g_iPlayer[i].DistanceBlocked == false)
             {
-                SetEntityRenderColor(g_iPlayer[i].ClientsRadio, 255, 255, 255, 200);
+                SetEntityRenderColor(g_iPlayer[i].ClientsEntity, 255, 255, 255, 200);
                 g_iPlayer[i].EntityBlocked = false;
 
             }
 
             else if (distance < 200.0 && g_iPlayer[i].EntityBlocked == false)
             {
-                SetEntityRenderColor(g_iPlayer[i].ClientsRadio, 255, 255, 255, 200);
+                SetEntityRenderColor(g_iPlayer[i].ClientsEntity, 255, 255, 255, 200);
                 g_iPlayer[i].DistanceBlocked = false;
             }
         }
@@ -367,16 +394,17 @@ void GetAimCoords(int client, float vector[3]) {
 }
 
 public bool TraceEntityFilterPlayer(int entity, int contentsMask, int client) {
-	return ((entity > MaxClients || entity < 1) && g_iPlayer[client].ClientsRadio != entity);
+	return ((entity > MaxClients || entity < 1) && g_iPlayer[client].ClientsEntity != entity);
 }
 
 float SetEntityAngle(int client, float EntityAng[3])
 {
     float ClientAng[3];
 
-    GetEntPropVector(g_iPlayer[client].ClientsRadio, Prop_Data, "m_angRotation", EntityAng);
+    GetEntPropVector(g_iPlayer[client].ClientsEntity, Prop_Data, "m_angRotation", EntityAng);
     GetClientEyeAngles(client, ClientAng);
     EntityAng[1] = ClientAng[1];
+    EntityAng[1] += g_iPlayer[client].EntityRotation;
     return EntityAng;
 }
 
@@ -399,7 +427,7 @@ public bool TraceEntityFilterSolid(int entity, int contentsMask)
 
 public Action Hook_SetTransmit(entity, client) 
 {
-    if (entity == g_iPlayer[client].ClientsRadio)
+    if (entity == g_iPlayer[client].ClientsEntity)
     {
         char time[16];
         FormatTime(time, sizeof(time), "%H:%M:%S", GetTime());
@@ -424,7 +452,7 @@ void RemoveFakeEntity(int client)
     if (g_iPlayer[client].active == true)
     {
         g_iPlayer[client].active = false;
-        RemoveEntity(g_iPlayer[client].ClientsRadio);
+        RemoveEntity(g_iPlayer[client].ClientsEntity);
         PrintHintText(client, "");
     }
 }
