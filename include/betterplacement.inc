@@ -3,6 +3,12 @@
 #endif
 #define _betterplacement_included
 
+enum PropType
+{
+    DynamicProp = 1,
+    MultiplayerProp = 2
+};
+
 /**
 * Starts the GUI of betterplacement.
 *
