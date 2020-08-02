@@ -1,6 +1,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
+#include <betterplacement>
 
 #define SND_Placing "buttons/button9.wav"
 #define SND_Rotating "items/flashlight1.wav"
@@ -12,6 +13,8 @@ enum struct PlayerData
     int ClientsEntity;
     
     float EntityRotation;
+
+    PropType ClientsPropType;
 
     bool active;
     bool EntityBlocked;
@@ -97,6 +100,12 @@ Action Command_SpawnProp(int client, int args)
             PrintToChat(client, "Alpha/transparency should be between 0 and 255!");
         }
 
+        Panel pChoosePropType = new Panel(); 
+        pChoosePropType.DrawText("Choose a prop type");
+        pChoosePropType.DrawItem("Dynamic prop type", ITEMDRAW_CONTROL);
+        pChoosePropType.DrawItem("Multiplayer prop type", ITEMDRAW_CONTROL);
+        pChoosePropType.Send(client, PanelHandler_ChoosePropType, 240);
+
         CreateFakeEntity(client);
         return Plugin_Handled;
     }
@@ -122,6 +131,34 @@ Action Command_Rotation(int client, const char[] command, int argc)
         return Plugin_Handled;
     }
     return Plugin_Continue;
+}
+public int PanelHandler_ChoosePropType(Menu menu, MenuAction action, int client, int choice)
+{
+    switch (action)
+    {
+        case MenuAction_Select:
+        {
+            switch (choice)
+            {
+                case 1:
+                {
+                    g_iPlayer[client].ClientsPropType = DynamicProp;
+                }
+                case 2:
+                {
+                    g_iPlayer[client].ClientsPropType = MultiplayerProp;
+                }
+            }
+        }
+        case MenuAction_Display :
+        {
+
+        }
+        case MenuAction_End:
+        {
+            delete menu;
+        }
+    }
 }
 
 public int Native_PlaceEntity(Handle plugin, int numParams)
@@ -261,7 +298,15 @@ void CreateEntity(int client)
 
         if (StrContains(g_iPlayer[client].model, "/") != -1 || StrContains(g_iPlayer[client].model, "\\") != -1)
         {
-            entity = CreateEntityByName("prop_physics_multiplayer");
+            if (g_iPlayer[client].ClientsPropType == DynamicProp)
+            {
+                entity = CreateEntityByName("prop_dynamic_override");
+            }
+
+            else if (g_iPlayer[client].ClientsPropType == MultiplayerProp)
+            {
+                entity = CreateEntityByName("prop_physics_multiplayer");
+            }
             PrecacheModel(g_iPlayer[client].model);  
             SetEntityModel(entity, g_iPlayer[client].model);
         }
