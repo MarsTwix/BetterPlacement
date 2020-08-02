@@ -14,7 +14,7 @@ enum struct PlayerData
     
     float EntityRotation;
 
-    PropType ClientsPropType;
+    EntityPropType ClientsPropType;
 
     bool active;
     bool EntityBlocked;

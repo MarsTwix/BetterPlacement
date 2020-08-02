@@ -3,7 +3,7 @@
 #endif
 #define _betterplacement_included
 
-enum PropType
+enum EntityPropType
 {
     DynamicProp = 1,
     MultiplayerProp = 2
