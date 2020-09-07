@@ -10,23 +10,40 @@
 
 enum struct PlayerData
 {
-    int ClientsEntity;
+    int ClientsFakeEntity;
     
-    float EntityRotation;
+    int EntityRotation;
 
+    CmdArgumentType ClientArgumentType;
     EntityPropType ClientsPropType;
+    bool ClientsVisibility;
 
     bool active;
+
     bool EntityBlocked;
     bool DistanceBlocked;
     bool BlockedPlacing;
     bool CancelPlacing;
+
+    bool GoGUI;
 
     char model[PLATFORM_MAX_PATH];
     char EntityTargetName[64];
     float Vector2;
     int alpha;
 }
+
+ConVar g_cDefaultHeight = null;
+ConVar g_cDefaultAlpha = null;
+
+ConVar g_cAskArgument = null;
+ConVar g_cDefaultArgument = null;
+
+ConVar g_cAskModelType = null;
+ConVar g_cDefaultModelType = null;
+
+ConVar g_cAskVisibility = null;
+ConVar g_cDefaultVisibility = null;
 
 PlayerData g_iPlayer[MAXPLAYERS+1];
 
@@ -47,9 +64,22 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
+    g_cDefaultHeight = CreateConVar("bp_default_height", "5.0", "The default value of the height that will be added to the entity.");
+    g_cDefaultAlpha = CreateConVar("bp_default_alpha", "150", "The default value of the alpha that will be set to the entity.");
+
+    g_cAskArgument = CreateConVar("bp_ask_argument", "1", "Asks for which command argument, if disabled default command argument will be filled in.");
+    g_cDefaultArgument = CreateConVar("bp_default_argument", "1", "The default command argument, if the ask for which command argument is disabled.");
+
+    g_cAskModelType = CreateConVar("bp_ask_model_type", "1", "Asks for the model type, if disabled default model type will be filled in.");
+    g_cDefaultModelType = CreateConVar("bp_default_model_type", "2", "The default value, if the ask for model type is disabled.");
+
+    g_cAskVisibility = CreateConVar("bp_ask_visibility", "0", "Asks if other players are allowed to see the fake entity, if disabled default visibility will be filled in.");
+    g_cDefaultVisibility = CreateConVar("bp_default_visibility", "1", "The default value for if other players can see the fake entity, if the ask for visibility is disabled.");
+
     RegAdminCmd("sm_spawnprop", Command_SpawnProp, ADMFLAG_GENERIC, "You can spawn an entity");
     AddCommandListener(Command_Rotation, "+lookatweapon");
     HookEvent("player_death", Event_PlayerDeath);
+    HookEvent("round_end", OnRoundEnd, EventHookMode_Post);
 }
 
 public void OnPluginEnd()
@@ -60,6 +90,14 @@ public void OnPluginEnd()
     }
 }
 
+public Action OnRoundEnd(Handle event, const char[] name, bool dontBroadcast)
+{
+    for(int i = 1; i <= MaxClients; i++)
+    {
+        RemoveFakeEntity(i);
+    }
+} 
+
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
     CreateNative("BP_PlaceEntity", Native_PlaceEntity);
@@ -67,8 +105,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
     g_fwOnFakeEntitySpawnPre = new GlobalForward("BP_OnFakeEntitySpawnPre", ET_Ignore, Param_Cell, Param_Cell);
     g_fwOnFakeEntitySpawn = new GlobalForward("BP_OnFakeEntitySpawn", ET_Ignore, Param_Cell, Param_Cell);
-    g_fwOnEntitySpawnPre = new GlobalForward("BP_OnEntitySpawnPre", ET_Ignore, Param_Cell, Param_Cell);
-    g_fwOnEntitySpawn = new GlobalForward("BP_OnEntitySpawn", ET_Ignore, Param_Cell, Param_Cell, Param_Array);
+    g_fwOnEntitySpawnPre = new GlobalForward("BP_OnEntitySpawnPre", ET_Ignore, Param_Cell, Param_Cell, Param_Array, Param_Array);
+    g_fwOnEntitySpawn = new GlobalForward("BP_OnEntitySpawn", ET_Ignore, Param_Cell, Param_Cell, Param_Array, Param_Array);
     return APLRes_Success;
 }
 
@@ -98,20 +136,103 @@ Action Command_SpawnProp(int client, int args)
         if(Arg3Int > 255 || Arg3Int < 0)
         {
             PrintToChat(client, "Alpha/transparency should be between 0 and 255!");
+            return Plugin_Handled;
         }
 
-        Panel pChoosePropType = new Panel(); 
-        pChoosePropType.DrawText("Choose a prop type");
-        pChoosePropType.DrawItem("Dynamic prop type", ITEMDRAW_CONTROL);
-        pChoosePropType.DrawItem("Multiplayer prop type", ITEMDRAW_CONTROL);
-        pChoosePropType.Send(client, PanelHandler_ChoosePropType, 240);
+        if (g_cAskModelType.BoolValue == true)
+        {
+            AskModelType(client);
+        }
 
-        CreateFakeEntity(client);
+        else
+        {   
+            g_iPlayer[client].ClientsPropType = g_cDefaultModelType.IntValue;
+        }
+
+        if (g_cAskVisibility.BoolValue == true)
+        {
+            AskVisibility(client);
+        }
+
+        else
+        {
+            g_iPlayer[client].ClientsVisibility = g_cDefaultVisibility.BoolValue;
+        }
+
+        if (g_iPlayer[client].GoGUI == true)
+        {
+            CreateFakeEntity(client);
+        }
+        return Plugin_Handled;
+    }
+
+    else if(args == 2)
+    {
+        char arg1[PLATFORM_MAX_PATH];
+        GetCmdArg(1, arg1, sizeof(arg1));
+        g_iPlayer[client].model = arg1;
+
+        char Arg2String[16];
+        GetCmdArg(2, Arg2String, sizeof(Arg2String));
+
+        if (g_cAskArgument.BoolValue == true)
+        {
+            AskArgument(client);
+        }
+        else
+        {
+            g_iPlayer[client].ClientArgumentType = g_cDefaultArgument.IntValue;
+        }
+
+        if (g_cDefaultArgument == Height)
+        {
+            float Arg2Float = StringToFloat(Arg2String);
+            g_iPlayer[client].Vector2 = Arg2Float;
+        }
+        else
+        {
+            int Arg2Int = StringToInt(Arg2String);
+
+            if(Arg2Int > 255 || Arg2Int < 0)
+            {
+                PrintToChat(client, "Alpha/transparency should be between 0 and 255!");
+                return Plugin_Handled;
+            }
+            else
+            {
+                g_iPlayer[client].alpha = Arg2Int;
+            }
+        }
+
+        if (g_cAskModelType.BoolValue == true)
+        {
+            AskModelType(client);
+        }
+
+        else
+        {   
+            g_iPlayer[client].ClientsPropType = g_cDefaultModelType.IntValue;
+        }
+
+        if (g_cAskVisibility.BoolValue == true)
+        {
+            AskVisibility(client);
+        }
+
+        else
+        {
+            g_iPlayer[client].ClientsVisibility = g_cDefaultVisibility.BoolValue;
+        }
+
+        if (g_iPlayer[client].GoGUI == true)
+        {
+            CreateFakeEntity(client);
+        }
         return Plugin_Handled;
     }
     else
     {
-        PrintToChat(client, "Usage: sm_betterplacement (modelname) (height of entity) (alpha/transparency)");
+        PrintToChat(client, "Usage: sm_betterplacement <Model path/Name> (Added height) (Alpha/Transparency)");
         return Plugin_Handled;
     }
 }
@@ -132,6 +253,43 @@ Action Command_Rotation(int client, const char[] command, int argc)
     }
     return Plugin_Continue;
 }
+
+public int PanelHandler_ChooseArgument(Menu menu, MenuAction action, int client, int choice)
+{
+    switch (action)
+    {
+        case MenuAction_Select:
+        {
+            switch (choice)
+            {
+                case 1:
+                {
+                    g_iPlayer[client].ClientArgumentType = Height;
+                    g_iPlayer[client].GoGUI = true;
+                }
+                case 2:
+                {
+                    g_iPlayer[client].ClientArgumentType = Alpha;
+                    g_iPlayer[client].GoGUI = true;
+                }
+                case 9:
+                {
+                    g_iPlayer[client].GoGUI = false;
+                }
+            }
+        }
+        case MenuAction_Display :
+        {
+
+        }
+        case MenuAction_End:
+        {
+            g_iPlayer[client].GoGUI = false;
+            delete menu;
+        }
+    }
+}
+
 public int PanelHandler_ChoosePropType(Menu menu, MenuAction action, int client, int choice)
 {
     switch (action)
@@ -143,10 +301,16 @@ public int PanelHandler_ChoosePropType(Menu menu, MenuAction action, int client,
                 case 1:
                 {
                     g_iPlayer[client].ClientsPropType = DynamicProp;
+                    g_iPlayer[client].GoGUI = true;
                 }
                 case 2:
                 {
                     g_iPlayer[client].ClientsPropType = MultiplayerProp;
+                    g_iPlayer[client].GoGUI = true;
+                }
+                case 9:
+                {
+                    g_iPlayer[client].GoGUI = false;
                 }
             }
         }
@@ -156,6 +320,43 @@ public int PanelHandler_ChoosePropType(Menu menu, MenuAction action, int client,
         }
         case MenuAction_End:
         {
+            g_iPlayer[client].GoGUI = false;
+            delete menu;
+        }
+    }
+}
+
+public int PanelHandler_ChooseVisibility(Menu menu, MenuAction action, int client, int choice)
+{
+    switch (action)
+    {
+        case MenuAction_Select:
+        {
+            switch (choice)
+            {
+                case 1:
+                {
+                    g_iPlayer[client].ClientsPropType = DynamicProp;
+                    g_iPlayer[client].GoGUI = true;
+                }
+                case 2:
+                {
+                    g_iPlayer[client].ClientsPropType = MultiplayerProp;
+                    g_iPlayer[client].GoGUI = true;
+                }
+                case 9:
+                {
+                    g_iPlayer[client].GoGUI = false;
+                }
+            }
+        }
+        case MenuAction_Display :
+        {
+
+        }
+        case MenuAction_End:
+        {
+            g_iPlayer[client].GoGUI = false;
             delete menu;
         }
     }
@@ -170,12 +371,20 @@ public int Native_PlaceEntity(Handle plugin, int numParams)
     g_iPlayer[client].model = modelname;
 
     float Vector2Num = view_as<float>(GetNativeCell(3));
-    g_iPlayer[client].Vector2 = Vector2Num;
+    if (Vector2Num == -1)
+    {
+        g_iPlayer[client].Vector2 = g_cDefaultHeight.FloatValue;
+    }
+
+    else 
+    {
+        g_iPlayer[client].Vector2 = Vector2Num;
+    }
 
     int AlphaNum = GetNativeCell(4);
     if (AlphaNum == -1)
     {
-        g_iPlayer[client].alpha = 150;
+        g_iPlayer[client].alpha = g_cDefaultAlpha.IntValue;
     }
     else if(AlphaNum > 255 || AlphaNum < 0)
     {
@@ -190,6 +399,14 @@ public int Native_PlaceEntity(Handle plugin, int numParams)
     char TargetName[64];
     GetNativeString(5, TargetName, sizeof(TargetName));
     g_iPlayer[client].EntityTargetName = TargetName;
+
+    g_iPlayer[client].ClientsPropType = GetNativeCell(6);
+    if (g_iPlayer[client].ClientsPropType != DynamicProp || g_iPlayer[client].ClientsPropType != MultiplayerProp)
+    {
+        PrintToServer("The entity prop type should be DynamicProp(1) or MultiplayerProp(2)!");
+        return -1;
+    }
+
     CreateFakeEntity(client);
     return 0;
 }
@@ -247,12 +464,13 @@ Action CreateFakeEntity(int client)
     }
     else if (g_iPlayer[client].active == false)
     {
-        g_iPlayer[client].ClientsEntity = entity;
+        g_iPlayer[client].ClientsFakeEntity = entity;
         g_iPlayer[client].active = true;
 
         GetAimCoords(client, vector);
         vector[2] += g_iPlayer[client].Vector2;
-        
+
+        SetEntProp(entity, Prop_Data, "m_takedamage", 0);
         SetEntityRenderMode(entity, RENDER_TRANSCOLOR);
         SetEntityRenderColor(entity, 255, 255, 255, g_iPlayer[client].alpha);
 
@@ -331,11 +549,13 @@ void CreateEntity(int client)
         Call_StartForward(g_fwOnEntitySpawnPre);
         Call_PushCell(entity);
         Call_PushCell(client);
+        Call_PushArray(EntityPos, 3);
+        Call_PushArray(angle, 3);
         Call_Finish();
 
         DispatchSpawn(entity);
 
-        RemoveEntity(g_iPlayer[client].ClientsEntity);
+        RemoveEntity(g_iPlayer[client].ClientsFakeEntity);
         TeleportEntity(entity, EntityPos, angle, NULL_VECTOR);
         PrintHintText(client, "You've placed the entity!");
         EmitSoundToClient(client, SND_Placing);
@@ -344,6 +564,7 @@ void CreateEntity(int client)
         Call_PushCell(entity);
         Call_PushCell(client);
         Call_PushArray(EntityPos, 3);
+        Call_PushArray(angle, 3);
         Call_Finish();
     }
 }
@@ -367,6 +588,7 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3
         RemoveFakeEntity(client);
         StopSound(client, SNDCHAN_AUTO, SND_Cancel);
         EmitSoundToClient(client, SND_Cancel);
+        PrintHintText(client, "You have canceled the placement of the entity!")
     }
     else if(buttons != IN_RELOAD && g_iPlayer[client].active == true && g_iPlayer[client].CancelPlacing == true)
     {
@@ -377,7 +599,7 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3
 
 public void OnGameFrame()
 {
-    for (int i = 0; i <= MaxClients; i++)
+    for (int i = 1; i <= MaxClients; i++)
     {
         if (g_iPlayer[i].active == true && !IsFakeClient(i) && IsClientConnected(i) && IsClientInGame(i) && i > 0 && IsPlayerAlive(i))
         { 
@@ -389,7 +611,7 @@ public void OnGameFrame()
 
             EntityAng = SetEntityAngle(i, EntityAng);
 
-            TeleportEntity(g_iPlayer[i].ClientsEntity, vector, EntityAng, NULL_VECTOR);
+            TeleportEntity(g_iPlayer[i].ClientsFakeEntity, vector, EntityAng, NULL_VECTOR);
 
             float ClientPos[3];
             GetClientAbsOrigin(i, ClientPos);
@@ -398,27 +620,27 @@ public void OnGameFrame()
             //FIX higher if vector 2 is higher than normal
             if (distance > 200.0)
             {
-                SetEntityRenderColor(g_iPlayer[i].ClientsEntity, 255, 165, 0, 200);
+                SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 165, 0, 200);
                 g_iPlayer[i].DistanceBlocked = true;
                 g_iPlayer[i].EntityBlocked = false;
             }
             
-            if (CheckIfEntityIsStuck(g_iPlayer[i].ClientsEntity))
+            if (CheckIfEntityIsStuck(g_iPlayer[i].ClientsFakeEntity))
             {
-                SetEntityRenderColor(g_iPlayer[i].ClientsEntity, 255, 0, 0, 200);
+                SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 0, 0, 200);
                 g_iPlayer[i].EntityBlocked = true;
                 g_iPlayer[i].DistanceBlocked = false;
             }
-            else if(!CheckIfEntityIsStuck(g_iPlayer[i].ClientsEntity) && g_iPlayer[i].DistanceBlocked == false)
+            else if(!CheckIfEntityIsStuck(g_iPlayer[i].ClientsFakeEntity) && g_iPlayer[i].DistanceBlocked == false)
             {
-                SetEntityRenderColor(g_iPlayer[i].ClientsEntity, 255, 255, 255, 200);
+                SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 255, 255, 200);
                 g_iPlayer[i].EntityBlocked = false;
 
             }
 
             else if (distance < 200.0 && g_iPlayer[i].EntityBlocked == false)
             {
-                SetEntityRenderColor(g_iPlayer[i].ClientsEntity, 255, 255, 255, 200);
+                SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 255, 255, 200);
                 g_iPlayer[i].DistanceBlocked = false;
             }
         }
@@ -439,14 +661,14 @@ void GetAimCoords(int client, float vector[3]) {
 }
 
 public bool TraceEntityFilterPlayer(int entity, int contentsMask, int client) {
-	return ((entity > MaxClients || entity < 1) && g_iPlayer[client].ClientsEntity != entity);
+	return ((entity > MaxClients || entity < 1) && g_iPlayer[client].ClientsFakeEntity != entity);
 }
 
 float SetEntityAngle(int client, float EntityAng[3])
 {
     float ClientAng[3];
 
-    GetEntPropVector(g_iPlayer[client].ClientsEntity, Prop_Data, "m_angRotation", EntityAng);
+    GetEntPropVector(g_iPlayer[client].ClientsFakeEntity, Prop_Data, "m_angRotation", EntityAng);
     GetClientEyeAngles(client, ClientAng);
     EntityAng[1] = ClientAng[1];
     EntityAng[1] += g_iPlayer[client].EntityRotation;
@@ -472,11 +694,29 @@ public bool TraceEntityFilterSolid(int entity, int contentsMask)
 
 public Action Hook_SetTransmit(entity, client) 
 {
-    if (entity == g_iPlayer[client].ClientsEntity)
+    int FakeEntitysClient = GetFakeEntitysClient(entity);
+
+    //show to everyone because of ask
+    if(g_iPlayer[FakeEntitysClient].ClientsVisibility == true && g_cAskVisibility.BoolValue == true)
     {
-        char time[16];
-        FormatTime(time, sizeof(time), "%H:%M:%S", GetTime());
-        PrintToConsoleAll("[%s] SetTransmit has been reached!", time);
+        return Plugin_Continue;
+    }
+
+    //show to client only because of aks
+    else if (entity == g_iPlayer[client].ClientsFakeEntity && g_iPlayer[FakeEntitysClient].ClientsVisibility == false && g_cAskVisibility.BoolValue == true)
+    {
+        return Plugin_Continue;
+    }
+    
+    //show to everyone when by default
+    else if(g_iPlayer[FakeEntitysClient].ClientsVisibility == true && g_cAskVisibility.BoolValue == false)
+    {
+        return Plugin_Continue;
+    }
+
+    //show to client only when by default
+    else if (entity == g_iPlayer[client].ClientsFakeEntity && g_iPlayer[FakeEntitysClient].ClientsVisibility == false && g_cAskVisibility.BoolValue == false)
+    {
         return Plugin_Continue;
     }
     return Plugin_Stop;
@@ -492,12 +732,59 @@ public void OnClientDisconnect(int client)
     RemoveFakeEntity(client);
 }
 
+void AskArgument(client)
+{
+    Panel pChoosePropType = new Panel(); 
+    pChoosePropType.DrawText("Choose a command argument");
+    pChoosePropType.DrawItem("Added height", ITEMDRAW_CONTROL);
+    pChoosePropType.DrawItem("Alpha/Transparency", ITEMDRAW_CONTROL);
+    pChoosePropType.SetKeys(9);
+    pChoosePropType.DrawItem("Cancel", ITEMDRAW_CONTROL);
+    pChoosePropType.Send(client, PanelHandler_ChoosePropType, 240);
+}
+
+void AskModelType(client)
+{
+    Panel pChoosePropType = new Panel(); 
+    pChoosePropType.DrawText("Choose a prop type");
+    pChoosePropType.DrawItem("Dynamic prop type", ITEMDRAW_CONTROL);
+    pChoosePropType.DrawItem("Multiplayer prop type", ITEMDRAW_CONTROL);
+    pChoosePropType.SetKeys(9);
+    pChoosePropType.DrawItem("Cancel", ITEMDRAW_CONTROL);
+    pChoosePropType.Send(client, PanelHandler_ChoosePropType, 240);
+}
+
+void AskVisibility(client)
+{
+    Panel pChoosePropType = new Panel(); 
+    pChoosePropType.DrawText("Fake entity visable to other players");
+    pChoosePropType.DrawItem("Yes", ITEMDRAW_CONTROL);
+    pChoosePropType.DrawItem("No", ITEMDRAW_CONTROL);
+    pChoosePropType.SetKeys(9);
+    pChoosePropType.DrawItem("Cancel", ITEMDRAW_CONTROL);
+    pChoosePropType.Send(client, PanelHandler_ChooseVisibility, 240);
+}
+
 void RemoveFakeEntity(int client)
 {
     if (g_iPlayer[client].active == true)
     {
         g_iPlayer[client].active = false;
-        RemoveEntity(g_iPlayer[client].ClientsEntity);
+        g_iPlayer[client].EntityRotation = 0;
+        g_iPlayer[client].ClientsFakeEntity = 0;
+        RemoveEntity(g_iPlayer[client].ClientsFakeEntity);
         PrintHintText(client, "");
     }
+}
+
+int GetFakeEntitysClient(int entity)
+{
+    for(int i = 1; i <= MaxClients; i++)
+    {
+        if(g_iPlayer[i].ClientsFakeEntity == entity)
+        {
+            return 1;
+        }
+    }
+    return -1;
 }
