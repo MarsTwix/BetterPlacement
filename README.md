@@ -23,12 +23,15 @@ There is no need for `models\` or `models/` infront of the model path, since the
 **ConVars:**
  - `bp_default_height` ~ *If the added height is not filled in, this will be the default value.*
  - `bp_default_alpha <0-255>` ~ *If the added Alpha/Transparncy is not filled in, this will be the default value.*
+ 
+ - `bp_ask_argument <0/1>` ~ *If the plugin should ask for the command argument, if disabled it will fill in the default command argument(see next ConVar)*
+ - `bp_default_argument <1/2>` ~ *The default command argument, if asking for the command argument is disabled.* `1` = *Added height to the entity.* / `2` = *Alpha/Transparncy.*
+ 
+ - `bp_ask_model_type <0/1>` ~ *If the plugin should ask for the modeltype, if disabled it will fill in the default model type(see next ConVar)*
+ - `bp_default_model_type <1/2>` ~ *The default model type, if asking for the model type is disabled.* `1` = *DynamicProp in other words: doesn't move.* / `2` = *MultiplayerProp in other words: does move.*
 
- - `bp_ask_model_type <false/true / 0/1>` ~ *If the plugin should ask for the modeltype, if disabled it will fill in the default model type(see next ConVar)*
- - `bp_default_model_type <1/2>` ~ *The default model type, if asking for the model type is disabled.* `1` = *DynamicProp in other words: doesn't move.* / `2` = *MultiplayerProp in other words: does move*
-
- - `bp_ask_visibility <false/true / 0/1>` ~ *If the plugin should ask if the fake entity is visable to other players, if disabled it will fill in the default visibility(see next ConVar)*
- - `bp_default_visibility <false/true / 0/1>` ~ *The default value if the fake entity should be visable to other players, if asking for the visibility is disabled.*
+ - `bp_ask_visibility <0/1>` ~ *If the plugin should ask if the fake entity is visable to other players, if disabled it will fill in the default visibility(see next ConVar)*
+ - `bp_default_visibility <0/1>` ~ *The default value if the fake entity should be visable to other players, if asking for the visibility is disabled.*
  
 ## For Developers
 All Forwards and Natives can be found [here](https://github.com/MarsTwix/BetterPlacement/blob/master/include/betterplacement.inc)!

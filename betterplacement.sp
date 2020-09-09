@@ -184,7 +184,7 @@ Action Command_SpawnProp(int client, int args)
             g_iPlayer[client].ClientArgumentType = g_cDefaultArgument.IntValue;
         }
 
-        if (g_cDefaultArgument == Height)
+        if (g_cDefaultArgument.IntValue == Height)
         {
             float Arg2Float = StringToFloat(Arg2String);
             g_iPlayer[client].Vector2 = Arg2Float;
@@ -740,7 +740,7 @@ void AskArgument(client)
     pChoosePropType.DrawItem("Alpha/Transparency", ITEMDRAW_CONTROL);
     pChoosePropType.SetKeys(9);
     pChoosePropType.DrawItem("Cancel", ITEMDRAW_CONTROL);
-    pChoosePropType.Send(client, PanelHandler_ChoosePropType, 240);
+    pChoosePropType.Send(client, PanelHandler_ChooseArgument, 240);
 }
 
 void AskModelType(client)
