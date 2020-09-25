@@ -3,6 +3,8 @@
 #include <sdkhooks>
 #include <betterplacement>
 
+#include <debugging>
+
 #define SND_Placing "buttons/button9.wav"
 #define SND_Rotating "items/flashlight1.wav"
 #define SND_Blocked "buttons/weapon_cant_buy.wav"
@@ -14,7 +16,8 @@ enum struct PlayerData
     
     int EntityRotation;
 
-    CmdArgumentType ClientArgumentType;
+    char SecondArgument[16];
+
     EntityPropType ClientsPropType;
     bool ClientsVisibility;
 
@@ -65,7 +68,7 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
     g_cDefaultHeight = CreateConVar("bp_default_height", "5.0", "The default value of the height that will be added to the entity.");
-    g_cDefaultAlpha = CreateConVar("bp_default_alpha", "150", "The default value of the alpha that will be set to the entity.");
+    g_cDefaultAlpha = CreateConVar("bp_default_alpha", "190", "The default value of the alpha that will be set to the entity.");
 
     g_cAskArgument = CreateConVar("bp_ask_argument", "1", "Asks for which command argument, if disabled default command argument will be filled in.");
     g_cDefaultArgument = CreateConVar("bp_default_argument", "1", "The default command argument, if the ask for which command argument is disabled.");
@@ -138,31 +141,13 @@ Action Command_SpawnProp(int client, int args)
             PrintToChat(client, "Alpha/transparency should be between 0 and 255!");
             return Plugin_Handled;
         }
-
-        if (g_cAskModelType.BoolValue == true)
-        {
-            AskModelType(client);
-        }
-
-        else
-        {   
-            g_iPlayer[client].ClientsPropType = g_cDefaultModelType.IntValue;
-        }
-
-        if (g_cAskVisibility.BoolValue == true)
-        {
-            AskVisibility(client);
-        }
-
         else
         {
-            g_iPlayer[client].ClientsVisibility = g_cDefaultVisibility.BoolValue;
+            g_iPlayer[client].alpha = Arg3Int;
         }
 
-        if (g_iPlayer[client].GoGUI == true)
-        {
-            CreateFakeEntity(client);
-        }
+        AskModelType(client);
+        
         return Plugin_Handled;
     }
 
@@ -177,62 +162,40 @@ Action Command_SpawnProp(int client, int args)
 
         if (g_cAskArgument.BoolValue == true)
         {
+            g_iPlayer[client].SecondArgument = Arg2String;
             AskArgument(client);
         }
         else
         {
-            g_iPlayer[client].ClientArgumentType = g_cDefaultArgument.IntValue;
-        }
-
-        if (g_cDefaultArgument == Height)
-        {
-            float Arg2Float = StringToFloat(Arg2String);
-            g_iPlayer[client].Vector2 = Arg2Float;
-        }
-        else
-        {
-            int Arg2Int = StringToInt(Arg2String);
-
-            if(Arg2Int > 255 || Arg2Int < 0)
+            if (g_cDefaultArgument.IntValue == Height)
             {
-                PrintToChat(client, "Alpha/transparency should be between 0 and 255!");
-                return Plugin_Handled;
+                float Arg2Float = StringToFloat(Arg2String);
+                g_iPlayer[client].Vector2 = Arg2Float;
+
+                g_iPlayer[client].alpha = g_cDefaultAlpha.IntValue;
             }
             else
             {
-                g_iPlayer[client].alpha = Arg2Int;
+                int Arg2Int = StringToInt(Arg2String);
+
+                if(Arg2Int > 255 || Arg2Int < 0)
+                {
+                    PrintToChat(client, "Alpha/transparency should be between 0 and 255!");
+                    return Plugin_Handled;
+                }
+                else
+                {
+                    g_iPlayer[client].alpha = Arg2Int;
+                    g_iPlayer[client].Vector2 = g_cDefaultHeight.FloatValue;
+                }
             }
-        }
-
-        if (g_cAskModelType.BoolValue == true)
-        {
             AskModelType(client);
-        }
-
-        else
-        {   
-            g_iPlayer[client].ClientsPropType = g_cDefaultModelType.IntValue;
-        }
-
-        if (g_cAskVisibility.BoolValue == true)
-        {
-            AskVisibility(client);
-        }
-
-        else
-        {
-            g_iPlayer[client].ClientsVisibility = g_cDefaultVisibility.BoolValue;
-        }
-
-        if (g_iPlayer[client].GoGUI == true)
-        {
-            CreateFakeEntity(client);
         }
         return Plugin_Handled;
     }
     else
     {
-        PrintToChat(client, "Usage: sm_betterplacement <Model path/Name> (Added height) (Alpha/Transparency)");
+        PrintToChat(client, "Usage: sm_betterplacement [Modelpath/Name] (Added height) (Alpha/Transparency)");
         return Plugin_Handled;
     }
 }
@@ -264,13 +227,19 @@ public int PanelHandler_ChooseArgument(Menu menu, MenuAction action, int client,
             {
                 case 1:
                 {
-                    g_iPlayer[client].ClientArgumentType = Height;
+                    g_iPlayer[client].Vector2 = StringToFloat(g_iPlayer[client].SecondArgument);
+                    g_iPlayer[client].alpha = g_cDefaultAlpha.IntValue;
+
                     g_iPlayer[client].GoGUI = true;
+                    AskModelType(client);
                 }
                 case 2:
                 {
-                    g_iPlayer[client].ClientArgumentType = Alpha;
+                    g_iPlayer[client].alpha = StringToInt(g_iPlayer[client].SecondArgument);
+                    g_iPlayer[client].Vector2 = g_cDefaultHeight.FloatValue;
+
                     g_iPlayer[client].GoGUI = true;
+                    AskModelType(client);
                 }
                 case 9:
                 {
@@ -278,11 +247,7 @@ public int PanelHandler_ChooseArgument(Menu menu, MenuAction action, int client,
                 }
             }
         }
-        case MenuAction_Display :
-        {
-
-        }
-        case MenuAction_End:
+        case MenuAction_Cancel:
         {
             g_iPlayer[client].GoGUI = false;
             delete menu;
@@ -302,11 +267,13 @@ public int PanelHandler_ChoosePropType(Menu menu, MenuAction action, int client,
                 {
                     g_iPlayer[client].ClientsPropType = DynamicProp;
                     g_iPlayer[client].GoGUI = true;
+                    AskVisibility(client);
                 }
                 case 2:
                 {
                     g_iPlayer[client].ClientsPropType = MultiplayerProp;
                     g_iPlayer[client].GoGUI = true;
+                    AskVisibility(client);
                 }
                 case 9:
                 {
@@ -314,11 +281,7 @@ public int PanelHandler_ChoosePropType(Menu menu, MenuAction action, int client,
                 }
             }
         }
-        case MenuAction_Display :
-        {
-
-        }
-        case MenuAction_End:
+        case MenuAction_Cancel:
         {
             g_iPlayer[client].GoGUI = false;
             delete menu;
@@ -338,11 +301,13 @@ public int PanelHandler_ChooseVisibility(Menu menu, MenuAction action, int clien
                 {
                     g_iPlayer[client].ClientsPropType = DynamicProp;
                     g_iPlayer[client].GoGUI = true;
+                    CreateFakeEntity(client);
                 }
                 case 2:
                 {
                     g_iPlayer[client].ClientsPropType = MultiplayerProp;
                     g_iPlayer[client].GoGUI = true;
+                    CreateFakeEntity(client);
                 }
                 case 9:
                 {
@@ -350,11 +315,7 @@ public int PanelHandler_ChooseVisibility(Menu menu, MenuAction action, int clien
                 }
             }
         }
-        case MenuAction_Display :
-        {
-
-        }
-        case MenuAction_End:
+        case MenuAction_Cancel:
         {
             g_iPlayer[client].GoGUI = false;
             delete menu;
@@ -529,6 +490,7 @@ void CreateEntity(int client)
             SetEntityModel(entity, g_iPlayer[client].model);
         }
 
+        //in this case used if model is 'chicken'
         else
         {
             entity = CreateEntityByName(g_iPlayer[client].model);
@@ -620,27 +582,27 @@ public void OnGameFrame()
             //FIX higher if vector 2 is higher than normal
             if (distance > 200.0)
             {
-                SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 165, 0, 200);
+                SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 165, 0, g_iPlayer[i].alpha);
                 g_iPlayer[i].DistanceBlocked = true;
                 g_iPlayer[i].EntityBlocked = false;
             }
             
             if (CheckIfEntityIsStuck(g_iPlayer[i].ClientsFakeEntity))
             {
-                SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 0, 0, 200);
+                SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 0, 0, g_iPlayer[i].alpha);
                 g_iPlayer[i].EntityBlocked = true;
                 g_iPlayer[i].DistanceBlocked = false;
             }
             else if(!CheckIfEntityIsStuck(g_iPlayer[i].ClientsFakeEntity) && g_iPlayer[i].DistanceBlocked == false)
             {
-                SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 255, 255, 200);
+                SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 255, 255, g_iPlayer[i].alpha);
                 g_iPlayer[i].EntityBlocked = false;
 
             }
 
             else if (distance < 200.0 && g_iPlayer[i].EntityBlocked == false)
             {
-                SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 255, 255, 200);
+                SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 255, 255, g_iPlayer[i].alpha);
                 g_iPlayer[i].DistanceBlocked = false;
             }
         }
@@ -734,35 +696,55 @@ public void OnClientDisconnect(int client)
 
 void AskArgument(client)
 {
-    Panel pChoosePropType = new Panel(); 
-    pChoosePropType.DrawText("Choose a command argument");
-    pChoosePropType.DrawItem("Added height", ITEMDRAW_CONTROL);
-    pChoosePropType.DrawItem("Alpha/Transparency", ITEMDRAW_CONTROL);
-    pChoosePropType.SetKeys(9);
-    pChoosePropType.DrawItem("Cancel", ITEMDRAW_CONTROL);
-    pChoosePropType.Send(client, PanelHandler_ChoosePropType, 240);
+    Panel pChooseArgument = new Panel(); 
+    pChooseArgument.DrawText("Choose a command argument");
+    pChooseArgument.DrawItem("Added height", ITEMDRAW_CONTROL);
+    pChooseArgument.DrawItem("Alpha/Transparency", ITEMDRAW_CONTROL);
+    pChooseArgument.DrawItem("", ITEMDRAW_SPACER);
+    pChooseArgument.CurrentKey = 9;
+    pChooseArgument.DrawItem("Cancel", ITEMDRAW_CONTROL);
+    pChooseArgument.Send(client, PanelHandler_ChooseArgument, 240);
 }
 
-void AskModelType(client)
+void AskModelType(int client)
 {
-    Panel pChoosePropType = new Panel(); 
-    pChoosePropType.DrawText("Choose a prop type");
-    pChoosePropType.DrawItem("Dynamic prop type", ITEMDRAW_CONTROL);
-    pChoosePropType.DrawItem("Multiplayer prop type", ITEMDRAW_CONTROL);
-    pChoosePropType.SetKeys(9);
-    pChoosePropType.DrawItem("Cancel", ITEMDRAW_CONTROL);
-    pChoosePropType.Send(client, PanelHandler_ChoosePropType, 240);
+    if(!StrEqual(g_iPlayer[client].model, "chicken",false) && g_cAskModelType.BoolValue == true){
+        Panel pChoosePropType = new Panel(); 
+        pChoosePropType.DrawText("Choose a prop type");
+        pChoosePropType.DrawItem("Dynamic prop type", ITEMDRAW_CONTROL);
+        pChoosePropType.DrawItem("Multiplayer prop type", ITEMDRAW_CONTROL);
+        pChoosePropType.DrawItem("", ITEMDRAW_SPACER);
+        pChoosePropType.CurrentKey = 9;
+        pChoosePropType.DrawItem("Cancel", ITEMDRAW_CONTROL);
+        pChoosePropType.Send(client, PanelHandler_ChoosePropType, 240);
+        
+    }
+    else
+    {   
+        g_iPlayer[client].ClientsPropType = g_cDefaultModelType.IntValue;
+        AskVisibility(client);
+    }
 }
 
-void AskVisibility(client)
+void AskVisibility(int client)
 {
-    Panel pChoosePropType = new Panel(); 
-    pChoosePropType.DrawText("Fake entity visable to other players");
-    pChoosePropType.DrawItem("Yes", ITEMDRAW_CONTROL);
-    pChoosePropType.DrawItem("No", ITEMDRAW_CONTROL);
-    pChoosePropType.SetKeys(9);
-    pChoosePropType.DrawItem("Cancel", ITEMDRAW_CONTROL);
-    pChoosePropType.Send(client, PanelHandler_ChooseVisibility, 240);
+    if (g_cAskVisibility.BoolValue == true)
+    {
+        Panel pChooseVisibility = new Panel(); 
+        pChooseVisibility.DrawText("Fake entity visible to other players");
+        pChooseVisibility.DrawItem("Yes", ITEMDRAW_CONTROL);
+        pChooseVisibility.DrawItem("No", ITEMDRAW_CONTROL);
+        pChooseVisibility.DrawItem("", ITEMDRAW_SPACER);
+        pChooseVisibility.CurrentKey = 9;
+        pChooseVisibility.DrawItem("Cancel", ITEMDRAW_CONTROL);
+        pChooseVisibility.Send(client, PanelHandler_ChooseVisibility, 240);
+    }
+
+    else
+    {
+        g_iPlayer[client].ClientsVisibility = g_cDefaultVisibility.BoolValue;
+        CreateFakeEntity(client);
+    }
 }
 
 void RemoveFakeEntity(int client)
