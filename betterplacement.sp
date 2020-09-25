@@ -167,7 +167,19 @@ Action Command_SpawnProp(int client, int args)
         }
         else
         {
-            if (g_cDefaultArgument.IntValue == Height)
+            g_iPlayer[client].ClientArgumentType = g_cDefaultArgument.IntValue;
+        }
+
+        if (g_cDefaultArgument.IntValue == Height)
+        {
+            float Arg2Float = StringToFloat(Arg2String);
+            g_iPlayer[client].Vector2 = Arg2Float;
+        }
+        else
+        {
+            int Arg2Int = StringToInt(Arg2String);
+
+            if(Arg2Int > 255 || Arg2Int < 0)
             {
                 float Arg2Float = StringToFloat(Arg2String);
                 g_iPlayer[client].Vector2 = Arg2Float;
