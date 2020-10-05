@@ -13,7 +13,8 @@
 enum struct PlayerData
 {
     int ClientsFakeEntity;
-    
+    int ClientsEntity;
+
     int EntityRotation;
 
     char SecondArgument[16];
@@ -38,6 +39,7 @@ enum struct PlayerData
 
 ConVar g_cDefaultHeight = null;
 ConVar g_cDefaultAlpha = null;
+ConVar g_cDefaultMaxDistance = null;
 
 ConVar g_cAskArgument = null;
 ConVar g_cDefaultArgument = null;
@@ -47,6 +49,9 @@ ConVar g_cDefaultModelType = null;
 
 ConVar g_cAskVisibility = null;
 ConVar g_cDefaultVisibility = null;
+
+ConVar g_cStuckBlock = null;
+ConVar g_cDistanceBlock = null;
 
 PlayerData g_iPlayer[MAXPLAYERS+1];
 
@@ -69,6 +74,7 @@ public void OnPluginStart()
 {
     g_cDefaultHeight = CreateConVar("bp_default_height", "5.0", "The default value of the height that will be added to the entity.");
     g_cDefaultAlpha = CreateConVar("bp_default_alpha", "190", "The default value of the alpha that will be set to the entity.");
+    g_cDefaultMaxDistance = CreateConVar("bp_default_max_distance", "200", "The default value of the max distance until blockage.");
 
     g_cAskArgument = CreateConVar("bp_ask_argument", "1", "Asks for which command argument, if disabled default command argument will be filled in.");
     g_cDefaultArgument = CreateConVar("bp_default_argument", "1", "The default command argument, if the ask for which command argument is disabled.");
@@ -79,7 +85,11 @@ public void OnPluginStart()
     g_cAskVisibility = CreateConVar("bp_ask_visibility", "0", "Asks if other players are allowed to see the fake entity, if disabled default visibility will be filled in.");
     g_cDefaultVisibility = CreateConVar("bp_default_visibility", "1", "The default value for if other players can see the fake entity, if the ask for visibility is disabled.");
 
+    g_cStuckBlock = CreateConVar("bp_stuck_block", "1", "To enable the blockage if an entity will be stuck when spawned");
+    g_cDistanceBlock = CreateConVar("bp_distance_block", "1", "To enable the blockage if an entity is too far from the player");
+
     RegAdminCmd("sm_spawnprop", Command_SpawnProp, ADMFLAG_GENERIC, "You can spawn an entity");
+    RegAdminCmd("sm_removemyprop", Command_RemoveMyProp, ADMFLAG_GENERIC, "Deletes the last places entity");
     AddCommandListener(Command_Rotation, "+lookatweapon");
     HookEvent("player_death", Event_PlayerDeath);
     HookEvent("round_end", OnRoundEnd, EventHookMode_Post);
@@ -167,24 +177,10 @@ Action Command_SpawnProp(int client, int args)
         }
         else
         {
-            g_iPlayer[client].ClientArgumentType = g_cDefaultArgument.IntValue;
-        }
-
-        if (g_cDefaultArgument.IntValue == Height)
-        {
-            float Arg2Float = StringToFloat(Arg2String);
-            g_iPlayer[client].Vector2 = Arg2Float;
-        }
-        else
-        {
-            int Arg2Int = StringToInt(Arg2String);
-
-            if(Arg2Int > 255 || Arg2Int < 0)
+            if (g_cDefaultArgument.IntValue == view_as<int>(Height))
             {
                 float Arg2Float = StringToFloat(Arg2String);
                 g_iPlayer[client].Vector2 = Arg2Float;
-
-                g_iPlayer[client].alpha = g_cDefaultAlpha.IntValue;
             }
             else
             {
@@ -192,17 +188,28 @@ Action Command_SpawnProp(int client, int args)
 
                 if(Arg2Int > 255 || Arg2Int < 0)
                 {
-                    PrintToChat(client, "Alpha/transparency should be between 0 and 255!");
-                    return Plugin_Handled;
+                    float Arg2Float = StringToFloat(Arg2String);
+                    g_iPlayer[client].Vector2 = Arg2Float;
+
+                    g_iPlayer[client].alpha = g_cDefaultAlpha.IntValue;
                 }
                 else
                 {
-                    g_iPlayer[client].alpha = Arg2Int;
-                    g_iPlayer[client].Vector2 = g_cDefaultHeight.FloatValue;
+                    if(Arg2Int > 255 || Arg2Int < 0)
+                    {
+                        PrintToChat(client, "Alpha/transparency should be between 0 and 255!");
+                        return Plugin_Handled;
+                    }
+                    else
+                    {
+                        g_iPlayer[client].alpha = Arg2Int;
+                        g_iPlayer[client].Vector2 = g_cDefaultHeight.FloatValue;
+                    }
                 }
+                AskModelType(client);
             }
-            AskModelType(client);
         }
+
         return Plugin_Handled;
     }
     else
@@ -210,6 +217,10 @@ Action Command_SpawnProp(int client, int args)
         PrintToChat(client, "Usage: sm_betterplacement [Modelpath/Name] (Added height) (Alpha/Transparency)");
         return Plugin_Handled;
     }
+}
+
+Action Command_RemoveMyProp(int client, int args){
+    RemoveEntity(g_iPlayer[client].ClientsEntity);
 }
 
 //rotation with inspect
@@ -512,34 +523,37 @@ void CreateEntity(int client)
         {
             PrintToChat(client, "couldn't spawn %s!", g_iPlayer[client].model);
         }
+        
+        else{
+            g_iPlayer[client].ClientsEntity = entity;
+            SetEntityRenderMode(entity, RENDER_TRANSCOLOR);
+            SetEntityRenderColor(entity, 255, 255, 255)
 
-        SetEntityRenderMode(entity, RENDER_TRANSCOLOR);
-        SetEntityRenderColor(entity, 255, 255, 255)
+            GetAimCoords(client, EntityPos);
+            EntityPos[2] += g_iPlayer[client].Vector2;
+            angle = SetEntityAngle(client, angle);
 
-        GetAimCoords(client, EntityPos);
-        EntityPos[2] += g_iPlayer[client].Vector2;
-        angle = SetEntityAngle(client, angle);
+            Call_StartForward(g_fwOnEntitySpawnPre);
+            Call_PushCell(entity);
+            Call_PushCell(client);
+            Call_PushArray(EntityPos, 3);
+            Call_PushArray(angle, 3);
+            Call_Finish();
 
-        Call_StartForward(g_fwOnEntitySpawnPre);
-        Call_PushCell(entity);
-        Call_PushCell(client);
-        Call_PushArray(EntityPos, 3);
-        Call_PushArray(angle, 3);
-        Call_Finish();
+            DispatchSpawn(entity);
 
-        DispatchSpawn(entity);
+            RemoveEntity(g_iPlayer[client].ClientsFakeEntity);
+            TeleportEntity(entity, EntityPos, angle, NULL_VECTOR);
+            PrintHintText(client, "You've placed the entity!");
+            EmitSoundToClient(client, SND_Placing);
 
-        RemoveEntity(g_iPlayer[client].ClientsFakeEntity);
-        TeleportEntity(entity, EntityPos, angle, NULL_VECTOR);
-        PrintHintText(client, "You've placed the entity!");
-        EmitSoundToClient(client, SND_Placing);
-
-        Call_StartForward(g_fwOnEntitySpawn);
-        Call_PushCell(entity);
-        Call_PushCell(client);
-        Call_PushArray(EntityPos, 3);
-        Call_PushArray(angle, 3);
-        Call_Finish();
+            Call_StartForward(g_fwOnEntitySpawn);
+            Call_PushCell(entity);
+            Call_PushCell(client);
+            Call_PushArray(EntityPos, 3);
+            Call_PushArray(angle, 3);
+            Call_Finish();
+        }
     }
 }
 
@@ -589,17 +603,18 @@ public void OnGameFrame()
 
             float ClientPos[3];
             GetClientAbsOrigin(i, ClientPos);
+            ClientPos[2] = vector[2];
             float distance = GetVectorDistance(vector, ClientPos);
             
             //FIX higher if vector 2 is higher than normal
-            if (distance > 200.0)
+            if (distance > g_cDefaultMaxDistance.FloatValue && g_cDistanceBlock.BoolValue)
             {
                 SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 165, 0, g_iPlayer[i].alpha);
                 g_iPlayer[i].DistanceBlocked = true;
                 g_iPlayer[i].EntityBlocked = false;
             }
             
-            if (CheckIfEntityIsStuck(g_iPlayer[i].ClientsFakeEntity))
+            if (CheckIfEntityIsStuck(g_iPlayer[i].ClientsFakeEntity) && g_cStuckBlock.BoolValue)
             {
                 SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 0, 0, g_iPlayer[i].alpha);
                 g_iPlayer[i].EntityBlocked = true;
@@ -612,7 +627,7 @@ public void OnGameFrame()
 
             }
 
-            else if (distance < 200.0 && g_iPlayer[i].EntityBlocked == false)
+            else if (distance < g_cDefaultMaxDistance.FloatValue && g_iPlayer[i].EntityBlocked == false)
             {
                 SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 255, 255, g_iPlayer[i].alpha);
                 g_iPlayer[i].DistanceBlocked = false;
@@ -733,7 +748,7 @@ void AskModelType(int client)
     }
     else
     {   
-        g_iPlayer[client].ClientsPropType = g_cDefaultModelType.IntValue;
+        g_iPlayer[client].ClientsPropType = view_as<EntityPropType>(g_cDefaultModelType.IntValue);
         AskVisibility(client);
     }
 }
