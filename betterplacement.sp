@@ -3,8 +3,7 @@
 #include <sdkhooks>
 #include <betterplacement>
 
-#include <debugging>
-
+//sounds
 #define SND_Placing "buttons/button9.wav"
 #define SND_Rotating "items/flashlight1.wav"
 #define SND_Blocked "buttons/weapon_cant_buy.wav"
@@ -12,31 +11,37 @@
 
 enum struct PlayerData
 {
+    //client's entities
     int ClientsFakeEntity;
     int ClientsEntity;
 
     int EntityRotation;
 
+    //cvar vars
     char SecondArgument[16];
-
     EntityPropType ClientsPropType;
     bool ClientsVisibility;
 
+    //if the client's entity is active
     bool active;
 
+    //blockage vars
     bool EntityBlocked;
     bool DistanceBlocked;
     bool BlockedPlacing;
     bool CancelPlacing;
 
+    //check if fake entity can be created
     bool GoGUI;
 
+    //entity properties
     char model[PLATFORM_MAX_PATH];
     char EntityTargetName[64];
     float Vector2;
     int alpha;
 }
 
+//cvars
 ConVar g_cDefaultHeight = null;
 ConVar g_cDefaultAlpha = null;
 ConVar g_cDefaultMaxDistance = null;
@@ -55,6 +60,7 @@ ConVar g_cDistanceBlock = null;
 
 PlayerData g_iPlayer[MAXPLAYERS+1];
 
+//forwards
 GlobalForward g_fwOnFakeEntitySpawnPre = null;
 GlobalForward g_fwOnFakeEntitySpawn = null;
 
@@ -95,22 +101,6 @@ public void OnPluginStart()
     HookEvent("round_end", OnRoundEnd, EventHookMode_Post);
 }
 
-public void OnPluginEnd()
-{
-    for(int i = 1; i <= MaxClients; i++)
-    {
-        RemoveFakeEntity(i);
-    }
-}
-
-public Action OnRoundEnd(Handle event, const char[] name, bool dontBroadcast)
-{
-    for(int i = 1; i <= MaxClients; i++)
-    {
-        RemoveFakeEntity(i);
-    }
-} 
-
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
     CreateNative("BP_PlaceEntity", Native_PlaceEntity);
@@ -130,6 +120,34 @@ public void OnMapStart()
     PrecacheSound(SND_Blocked);
     PrecacheSound(SND_Cancel);
 }
+
+public void OnPluginEnd()
+{
+    for(int i = 1; i <= MaxClients; i++)
+    {
+        RemoveFakeEntity(i);
+    }
+}
+
+public Action OnRoundEnd(Handle event, const char[] name, bool dontBroadcast)
+{
+    for(int i = 1; i <= MaxClients; i++)
+    {
+        RemoveFakeEntity(i);
+    }
+} 
+
+public void OnClientDisconnect(int client)
+{
+    RemoveFakeEntity(client);
+}
+
+public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    RemoveFakeEntity(client);
+}
+
 Action Command_SpawnProp(int client, int args)
 {
     if(args == 3)
@@ -240,112 +258,6 @@ Action Command_Rotation(int client, const char[] command, int argc)
     return Plugin_Continue;
 }
 
-public int PanelHandler_ChooseArgument(Menu menu, MenuAction action, int client, int choice)
-{
-    switch (action)
-    {
-        case MenuAction_Select:
-        {
-            switch (choice)
-            {
-                case 1:
-                {
-                    g_iPlayer[client].Vector2 = StringToFloat(g_iPlayer[client].SecondArgument);
-                    g_iPlayer[client].alpha = g_cDefaultAlpha.IntValue;
-
-                    g_iPlayer[client].GoGUI = true;
-                    AskModelType(client);
-                }
-                case 2:
-                {
-                    g_iPlayer[client].alpha = StringToInt(g_iPlayer[client].SecondArgument);
-                    g_iPlayer[client].Vector2 = g_cDefaultHeight.FloatValue;
-
-                    g_iPlayer[client].GoGUI = true;
-                    AskModelType(client);
-                }
-                case 9:
-                {
-                    g_iPlayer[client].GoGUI = false;
-                }
-            }
-        }
-        case MenuAction_Cancel:
-        {
-            g_iPlayer[client].GoGUI = false;
-            delete menu;
-        }
-    }
-}
-
-public int PanelHandler_ChoosePropType(Menu menu, MenuAction action, int client, int choice)
-{
-    switch (action)
-    {
-        case MenuAction_Select:
-        {
-            switch (choice)
-            {
-                case 1:
-                {
-                    g_iPlayer[client].ClientsPropType = DynamicProp;
-                    g_iPlayer[client].GoGUI = true;
-                    AskVisibility(client);
-                }
-                case 2:
-                {
-                    g_iPlayer[client].ClientsPropType = MultiplayerProp;
-                    g_iPlayer[client].GoGUI = true;
-                    AskVisibility(client);
-                }
-                case 9:
-                {
-                    g_iPlayer[client].GoGUI = false;
-                }
-            }
-        }
-        case MenuAction_Cancel:
-        {
-            g_iPlayer[client].GoGUI = false;
-            delete menu;
-        }
-    }
-}
-
-public int PanelHandler_ChooseVisibility(Menu menu, MenuAction action, int client, int choice)
-{
-    switch (action)
-    {
-        case MenuAction_Select:
-        {
-            switch (choice)
-            {
-                case 1:
-                {
-                    g_iPlayer[client].ClientsPropType = DynamicProp;
-                    g_iPlayer[client].GoGUI = true;
-                    CreateFakeEntity(client);
-                }
-                case 2:
-                {
-                    g_iPlayer[client].ClientsPropType = MultiplayerProp;
-                    g_iPlayer[client].GoGUI = true;
-                    CreateFakeEntity(client);
-                }
-                case 9:
-                {
-                    g_iPlayer[client].GoGUI = false;
-                }
-            }
-        }
-        case MenuAction_Cancel:
-        {
-            g_iPlayer[client].GoGUI = false;
-            delete menu;
-        }
-    }
-}
-
 public int Native_PlaceEntity(Handle plugin, int numParams)
 {
     int client = GetNativeCell(1);
@@ -410,11 +322,175 @@ public int Native_HasTargetName(Handle plugin, int numParams)
     }
 }
 
+
+
+void AskArgument(client)
+{
+    Panel pChooseArgument = new Panel(); 
+    pChooseArgument.DrawText("Choose a command argument");
+    pChooseArgument.DrawItem("Added height", ITEMDRAW_CONTROL);
+    pChooseArgument.DrawItem("Alpha/Transparency", ITEMDRAW_CONTROL);
+    pChooseArgument.DrawItem("", ITEMDRAW_SPACER);
+    pChooseArgument.CurrentKey = 9;
+    pChooseArgument.DrawItem("Cancel", ITEMDRAW_CONTROL);
+    pChooseArgument.Send(client, PanelHandler_ChooseArgument, 240);
+}
+
+public int PanelHandler_ChooseArgument(Menu menu, MenuAction action, int client, int choice)
+{
+    switch (action)
+    {
+        case MenuAction_Select:
+        {
+            switch (choice)
+            {
+                case 1:
+                {
+                    g_iPlayer[client].Vector2 = StringToFloat(g_iPlayer[client].SecondArgument);
+                    g_iPlayer[client].alpha = g_cDefaultAlpha.IntValue;
+
+                    g_iPlayer[client].GoGUI = true;
+                    AskModelType(client);
+                }
+                case 2:
+                {
+                    g_iPlayer[client].alpha = StringToInt(g_iPlayer[client].SecondArgument);
+                    g_iPlayer[client].Vector2 = g_cDefaultHeight.FloatValue;
+
+                    g_iPlayer[client].GoGUI = true;
+                    AskModelType(client);
+                }
+                case 9:
+                {
+                    g_iPlayer[client].GoGUI = false;
+                }
+            }
+        }
+        case MenuAction_Cancel:
+        {
+            g_iPlayer[client].GoGUI = false;
+            delete menu;
+        }
+    }
+}
+
+
+void AskModelType(int client)
+{
+    if(!StrEqual(g_iPlayer[client].model, "chicken",false) && g_cAskModelType.BoolValue == true){
+        Panel pChoosePropType = new Panel(); 
+        pChoosePropType.DrawText("Choose a prop type");
+        pChoosePropType.DrawItem("Dynamic prop type", ITEMDRAW_CONTROL);
+        pChoosePropType.DrawItem("Multiplayer prop type", ITEMDRAW_CONTROL);
+        pChoosePropType.DrawItem("", ITEMDRAW_SPACER);
+        pChoosePropType.CurrentKey = 9;
+        pChoosePropType.DrawItem("Cancel", ITEMDRAW_CONTROL);
+        pChoosePropType.Send(client, PanelHandler_ChoosePropType, 240);
+        
+    }
+    else
+    {   
+        g_iPlayer[client].ClientsPropType = g_cDefaultModelType.IntValue;
+        AskVisibility(client);
+    }
+}
+
+public int PanelHandler_ChoosePropType(Menu menu, MenuAction action, int client, int choice)
+{
+    switch (action)
+    {
+        case MenuAction_Select:
+        {
+            switch (choice)
+            {
+                case 1:
+                {
+                    g_iPlayer[client].ClientsPropType = DynamicProp;
+                    g_iPlayer[client].GoGUI = true;
+                    AskVisibility(client);
+                }
+                case 2:
+                {
+                    g_iPlayer[client].ClientsPropType = MultiplayerProp;
+                    g_iPlayer[client].GoGUI = true;
+                    AskVisibility(client);
+                }
+                case 9:
+                {
+                    g_iPlayer[client].GoGUI = false;
+                }
+            }
+        }
+        case MenuAction_Cancel:
+        {
+            g_iPlayer[client].GoGUI = false;
+            delete menu;
+        }
+    }
+}
+
+void AskVisibility(int client)
+{
+    if (g_cAskVisibility.BoolValue == true)
+    {
+        Panel pChooseVisibility = new Panel(); 
+        pChooseVisibility.DrawText("Fake entity visible to other players");
+        pChooseVisibility.DrawItem("Yes", ITEMDRAW_CONTROL);
+        pChooseVisibility.DrawItem("No", ITEMDRAW_CONTROL);
+        pChooseVisibility.DrawItem("", ITEMDRAW_SPACER);
+        pChooseVisibility.CurrentKey = 9;
+        pChooseVisibility.DrawItem("Cancel", ITEMDRAW_CONTROL);
+        pChooseVisibility.Send(client, PanelHandler_ChooseVisibility, 240);
+    }
+
+    else
+    {
+        g_iPlayer[client].ClientsVisibility = g_cDefaultVisibility.BoolValue;
+        CreateFakeEntity(client);
+    }
+}
+
+public int PanelHandler_ChooseVisibility(Menu menu, MenuAction action, int client, int choice)
+{
+    switch (action)
+    {
+        case MenuAction_Select:
+        {
+            switch (choice)
+            {
+                case 1:
+                {
+                    g_iPlayer[client].ClientsPropType = DynamicProp;
+                    g_iPlayer[client].GoGUI = true;
+                    CreateFakeEntity(client);
+                }
+                case 2:
+                {
+                    g_iPlayer[client].ClientsPropType = MultiplayerProp;
+                    g_iPlayer[client].GoGUI = true;
+                    CreateFakeEntity(client);
+                }
+                case 9:
+                {
+                    g_iPlayer[client].GoGUI = false;
+                }
+            }
+        }
+        case MenuAction_Cancel:
+        {
+            g_iPlayer[client].GoGUI = false;
+            delete menu;
+        }
+    }
+}
+
 Action CreateFakeEntity(int client)
 {
     float vector[3];
     int entity;
     char ClientModel[PLATFORM_MAX_PATH];
+
+    //checks if it not a name, but a path and adds `models/` or `models\` to the path if missed
     if (StrContains(g_iPlayer[client].model, "/") != -1 || StrContains(g_iPlayer[client].model, "\\") != -1)
     {
         ClientModel = g_iPlayer[client].model;
@@ -446,6 +522,7 @@ Action CreateFakeEntity(int client)
         PrintToServer("couldn't spawn %s!", g_iPlayer[client].model);
         return Plugin_Handled;
     }
+
     else if (g_iPlayer[client].active == false)
     {
         g_iPlayer[client].ClientsFakeEntity = entity;
@@ -480,6 +557,7 @@ Action CreateFakeEntity(int client)
 
 void CreateEntity(int client)
 {
+    //blockage messages and sounds
     if (g_iPlayer[client].EntityBlocked == true)
     {
         PrintHintText(client, "You can't place the entity there, because it is in something!");
@@ -490,6 +568,7 @@ void CreateEntity(int client)
         PrintHintText(client, "You can't place the entity there, because it is too far away!");
         EmitSoundToClient(client, SND_Blocked);
     }
+
     else
     {
         g_iPlayer[client].active = false
@@ -498,6 +577,7 @@ void CreateEntity(int client)
 
         int entity;
 
+        //checks if it not a name, but a path and adds `models/` or `models\` to the path if missed
         if (StrContains(g_iPlayer[client].model, "/") != -1 || StrContains(g_iPlayer[client].model, "\\") != -1)
         {
             if (g_iPlayer[client].ClientsPropType == DynamicProp)
@@ -543,6 +623,7 @@ void CreateEntity(int client)
             DispatchSpawn(entity);
 
             RemoveEntity(g_iPlayer[client].ClientsFakeEntity);
+            g_iPlayer[client].ClientsFakeEntity = 0;
             TeleportEntity(entity, EntityPos, angle, NULL_VECTOR);
             PrintHintText(client, "You've placed the entity!");
             EmitSoundToClient(client, SND_Placing);
@@ -582,13 +663,13 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3
     {
         g_iPlayer[client].CancelPlacing = false;
     }
-
 }
 
 public void OnGameFrame()
 {
     for (int i = 1; i <= MaxClients; i++)
     {
+        //blockage check
         if (g_iPlayer[i].active == true && !IsFakeClient(i) && IsClientConnected(i) && IsClientInGame(i) && i > 0 && IsPlayerAlive(i))
         { 
             float vector[3];
@@ -606,7 +687,6 @@ public void OnGameFrame()
             ClientPos[2] = vector[2];
             float distance = GetVectorDistance(vector, ClientPos);
             
-            //FIX higher if vector 2 is higher than normal
             if (distance > g_cDefaultMaxDistance.FloatValue && g_cDistanceBlock.BoolValue)
             {
                 SetEntityRenderColor(g_iPlayer[i].ClientsFakeEntity, 255, 165, 0, g_iPlayer[i].alpha);
@@ -634,6 +714,34 @@ public void OnGameFrame()
             }
         }
     }
+}
+
+public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon, int& subtype, int& cmdnum, int& tickcount, int& seed, int mouse[2])
+{
+    if(buttons == IN_USE && g_iPlayer[client].active == true && g_iPlayer[client].BlockedPlacing == false)
+    {
+        g_iPlayer[client].BlockedPlacing = true;
+        StopSound(client, SNDCHAN_AUTO, SND_Blocked);
+        CreateEntity(client);
+    }
+    else if(buttons != IN_USE && g_iPlayer[client].active == true && g_iPlayer[client].BlockedPlacing == true)
+    {
+        g_iPlayer[client].BlockedPlacing = false;
+    }
+
+    if(buttons == IN_RELOAD && g_iPlayer[client].active == true && g_iPlayer[client].CancelPlacing == false)
+    {
+        g_iPlayer[client].CancelPlacing = true;
+        RemoveFakeEntity(client);
+        StopSound(client, SNDCHAN_AUTO, SND_Cancel);
+        EmitSoundToClient(client, SND_Cancel);
+        PrintHintText(client, "You have canceled the placement of the entity!")
+    }
+    else if(buttons != IN_RELOAD && g_iPlayer[client].active == true && g_iPlayer[client].CancelPlacing == true)
+    {
+        g_iPlayer[client].CancelPlacing = false;
+    }
+
 }
 
 void GetAimCoords(int client, float vector[3]) {
