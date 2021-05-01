@@ -238,7 +238,11 @@ Action Command_SpawnProp(int client, int args)
 }
 
 Action Command_RemoveMyProp(int client, int args){
-    RemoveEntity(g_iPlayer[client].ClientsEntity);
+    if(g_iPlayer[client].ClientsEntity != 0)
+    {
+        RemoveEntity(g_iPlayer[client].ClientsEntity);
+        g_iPlayer[client].ClientsEntity = 0;
+    }
 }
 
 //rotation with inspect
@@ -390,7 +394,7 @@ void AskModelType(int client)
     }
     else
     {   
-        g_iPlayer[client].ClientsPropType = g_cDefaultModelType.IntValue;
+        g_iPlayer[client].ClientsPropType = view_as<EntityPropType>(g_cDefaultModelType.IntValue);
         AskVisibility(client);
     }
 }
@@ -531,7 +535,6 @@ Action CreateFakeEntity(int client)
         GetAimCoords(client, vector);
         vector[2] += g_iPlayer[client].Vector2;
 
-        SetEntProp(entity, Prop_Data, "m_takedamage", 0);
         SetEntityRenderMode(entity, RENDER_TRANSCOLOR);
         SetEntityRenderColor(entity, 255, 255, 255, g_iPlayer[client].alpha);
 
@@ -543,6 +546,7 @@ Action CreateFakeEntity(int client)
         Call_Finish();
 
         DispatchSpawn(entity);
+        SetEntProp(entity, Prop_Data, "m_takedamage", 0, 1);
         TeleportEntity(entity, vector, NULL_VECTOR, NULL_VECTOR);
 
         Call_StartForward(g_fwOnFakeEntitySpawn);
@@ -716,34 +720,6 @@ public void OnGameFrame()
     }
 }
 
-public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon, int& subtype, int& cmdnum, int& tickcount, int& seed, int mouse[2])
-{
-    if(buttons == IN_USE && g_iPlayer[client].active == true && g_iPlayer[client].BlockedPlacing == false)
-    {
-        g_iPlayer[client].BlockedPlacing = true;
-        StopSound(client, SNDCHAN_AUTO, SND_Blocked);
-        CreateEntity(client);
-    }
-    else if(buttons != IN_USE && g_iPlayer[client].active == true && g_iPlayer[client].BlockedPlacing == true)
-    {
-        g_iPlayer[client].BlockedPlacing = false;
-    }
-
-    if(buttons == IN_RELOAD && g_iPlayer[client].active == true && g_iPlayer[client].CancelPlacing == false)
-    {
-        g_iPlayer[client].CancelPlacing = true;
-        RemoveFakeEntity(client);
-        StopSound(client, SNDCHAN_AUTO, SND_Cancel);
-        EmitSoundToClient(client, SND_Cancel);
-        PrintHintText(client, "You have canceled the placement of the entity!")
-    }
-    else if(buttons != IN_RELOAD && g_iPlayer[client].active == true && g_iPlayer[client].CancelPlacing == true)
-    {
-        g_iPlayer[client].CancelPlacing = false;
-    }
-
-}
-
 void GetAimCoords(int client, float vector[3]) {
 	float vAngles[3];
 	float vOrigin[3];
@@ -818,69 +794,6 @@ public Action Hook_SetTransmit(entity, client)
     }
     return Plugin_Stop;
 }
-public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast)
-{
-    int client = GetClientOfUserId(event.GetInt("userid"));
-    RemoveFakeEntity(client);
-}
-
-public void OnClientDisconnect(int client)
-{
-    RemoveFakeEntity(client);
-}
-
-void AskArgument(client)
-{
-    Panel pChooseArgument = new Panel(); 
-    pChooseArgument.DrawText("Choose a command argument");
-    pChooseArgument.DrawItem("Added height", ITEMDRAW_CONTROL);
-    pChooseArgument.DrawItem("Alpha/Transparency", ITEMDRAW_CONTROL);
-    pChooseArgument.DrawItem("", ITEMDRAW_SPACER);
-    pChooseArgument.CurrentKey = 9;
-    pChooseArgument.DrawItem("Cancel", ITEMDRAW_CONTROL);
-    pChooseArgument.Send(client, PanelHandler_ChooseArgument, 240);
-}
-
-void AskModelType(int client)
-{
-    if(!StrEqual(g_iPlayer[client].model, "chicken",false) && g_cAskModelType.BoolValue == true){
-        Panel pChoosePropType = new Panel(); 
-        pChoosePropType.DrawText("Choose a prop type");
-        pChoosePropType.DrawItem("Dynamic prop type", ITEMDRAW_CONTROL);
-        pChoosePropType.DrawItem("Multiplayer prop type", ITEMDRAW_CONTROL);
-        pChoosePropType.DrawItem("", ITEMDRAW_SPACER);
-        pChoosePropType.CurrentKey = 9;
-        pChoosePropType.DrawItem("Cancel", ITEMDRAW_CONTROL);
-        pChoosePropType.Send(client, PanelHandler_ChoosePropType, 240);
-        
-    }
-    else
-    {   
-        g_iPlayer[client].ClientsPropType = view_as<EntityPropType>(g_cDefaultModelType.IntValue);
-        AskVisibility(client);
-    }
-}
-
-void AskVisibility(int client)
-{
-    if (g_cAskVisibility.BoolValue == true)
-    {
-        Panel pChooseVisibility = new Panel(); 
-        pChooseVisibility.DrawText("Fake entity visible to other players");
-        pChooseVisibility.DrawItem("Yes", ITEMDRAW_CONTROL);
-        pChooseVisibility.DrawItem("No", ITEMDRAW_CONTROL);
-        pChooseVisibility.DrawItem("", ITEMDRAW_SPACER);
-        pChooseVisibility.CurrentKey = 9;
-        pChooseVisibility.DrawItem("Cancel", ITEMDRAW_CONTROL);
-        pChooseVisibility.Send(client, PanelHandler_ChooseVisibility, 240);
-    }
-
-    else
-    {
-        g_iPlayer[client].ClientsVisibility = g_cDefaultVisibility.BoolValue;
-        CreateFakeEntity(client);
-    }
-}
 
 void RemoveFakeEntity(int client)
 {
@@ -888,8 +801,8 @@ void RemoveFakeEntity(int client)
     {
         g_iPlayer[client].active = false;
         g_iPlayer[client].EntityRotation = 0;
-        g_iPlayer[client].ClientsFakeEntity = 0;
         RemoveEntity(g_iPlayer[client].ClientsFakeEntity);
+        g_iPlayer[client].ClientsFakeEntity = 0;
         PrintHintText(client, "");
     }
 }
