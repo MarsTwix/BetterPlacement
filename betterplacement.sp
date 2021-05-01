@@ -3,7 +3,7 @@
 #include <sdkhooks>
 #include <betterplacement>
 
-//sounds
+//sounds (default csgo sounds)
 #define SND_Placing "buttons/button9.wav"
 #define SND_Rotating "items/flashlight1.wav"
 #define SND_Blocked "buttons/weapon_cant_buy.wav"
@@ -24,6 +24,7 @@ enum struct PlayerData
 
     //if the client's entity is active
     bool active;
+    bool HeightMenu;
 
     //blockage vars
     bool EntityBlocked;
@@ -150,12 +151,37 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
 
 Action Command_SpawnProp(int client, int args)
 {
+    char arg1[PLATFORM_MAX_PATH];
+    GetCmdArg(1, arg1, sizeof(arg1));
+
+    if(args > 0)
+    {
+        bool IsOnlyNumber = true;
+        for(int i = 0; i < sizeof(arg1); i++){
+            
+            if(StrContains(arg1[i], " "))
+            {
+                break;
+            }
+            if( !IsCharNumeric( StringToInt(arg1[i]) ) )
+            {
+                IsOnlyNumber = false;
+            } 
+        }
+        if(IsOnlyNumber)
+        {
+            PrintToChat(client, "A number is not a model!");
+            return Plugin_Handled;
+        }
+        else
+        {
+            g_iPlayer[client].model = arg1;
+        }
+    }
+
     if(args == 3)
     {
-        char arg1[PLATFORM_MAX_PATH];
-        GetCmdArg(1, arg1, sizeof(arg1));
-        g_iPlayer[client].model = arg1;
-
+        
         char Arg2String[16];
         GetCmdArg(2, Arg2String, sizeof(Arg2String));
         float Arg2Float = StringToFloat(Arg2String);
@@ -181,10 +207,6 @@ Action Command_SpawnProp(int client, int args)
 
     else if(args == 2)
     {
-        char arg1[PLATFORM_MAX_PATH];
-        GetCmdArg(1, arg1, sizeof(arg1));
-        g_iPlayer[client].model = arg1;
-
         char Arg2String[16];
         GetCmdArg(2, Arg2String, sizeof(Arg2String));
 
@@ -228,6 +250,15 @@ Action Command_SpawnProp(int client, int args)
             }
         }
 
+        return Plugin_Handled;
+    }
+    else if (args == 1)
+    {
+
+        g_iPlayer[client].alpha = g_cDefaultAlpha.IntValue;
+        g_iPlayer[client].Vector2 = g_cDefaultHeight.FloatValue;
+
+        AskModelType(client);
         return Plugin_Handled;
     }
     else
@@ -337,7 +368,7 @@ void AskArgument(client)
     pChooseArgument.DrawItem("", ITEMDRAW_SPACER);
     pChooseArgument.CurrentKey = 9;
     pChooseArgument.DrawItem("Cancel", ITEMDRAW_CONTROL);
-    pChooseArgument.Send(client, PanelHandler_ChooseArgument, 240);
+    pChooseArgument.Send(client, PanelHandler_ChooseArgument, MENU_TIME_FOREVER);
 }
 
 public int PanelHandler_ChooseArgument(Menu menu, MenuAction action, int client, int choice)
@@ -389,7 +420,7 @@ void AskModelType(int client)
         pChoosePropType.DrawItem("", ITEMDRAW_SPACER);
         pChoosePropType.CurrentKey = 9;
         pChoosePropType.DrawItem("Cancel", ITEMDRAW_CONTROL);
-        pChoosePropType.Send(client, PanelHandler_ChoosePropType, 240);
+        pChoosePropType.Send(client, PanelHandler_ChoosePropType, MENU_TIME_FOREVER);
         
     }
     else
@@ -444,7 +475,7 @@ void AskVisibility(int client)
         pChooseVisibility.DrawItem("", ITEMDRAW_SPACER);
         pChooseVisibility.CurrentKey = 9;
         pChooseVisibility.DrawItem("Cancel", ITEMDRAW_CONTROL);
-        pChooseVisibility.Send(client, PanelHandler_ChooseVisibility, 240);
+        pChooseVisibility.Send(client, PanelHandler_ChooseVisibility, MENU_TIME_FOREVER);
     }
 
     else
@@ -553,6 +584,8 @@ Action CreateFakeEntity(int client)
         Call_PushCell(entity);
         Call_PushCell(client);
         Call_Finish();
+
+        MainHeightPanel(client);
 
         return Plugin_Handled;
     }
@@ -717,6 +750,10 @@ public void OnGameFrame()
                 g_iPlayer[i].DistanceBlocked = false;
             }
         }
+        else if(g_iPlayer[i].active == false && g_iPlayer[i].HeightMenu == true){
+            CancelClientMenu(i);
+            g_iPlayer[i].HeightMenu = false;
+        }
     }
 }
 
@@ -817,4 +854,72 @@ int GetFakeEntitysClient(int entity)
         }
     }
     return -1;
+}
+
+void MainHeightPanel(int client)
+{
+    g_iPlayer[client].HeightMenu = true;
+    Panel pChangeHeight = new Panel(); 
+    pChangeHeight.DrawText("Change entity height");
+    pChangeHeight.DrawItem("+100", ITEMDRAW_CONTROL);
+    pChangeHeight.DrawItem("+10", ITEMDRAW_CONTROL);
+    pChangeHeight.DrawItem("+1", ITEMDRAW_CONTROL);
+    pChangeHeight.DrawItem("+0.1", ITEMDRAW_CONTROL);
+    pChangeHeight.DrawItem("", ITEMDRAW_SPACER);
+    pChangeHeight.DrawItem("-100", ITEMDRAW_CONTROL);
+    pChangeHeight.DrawItem("-10", ITEMDRAW_CONTROL);
+    pChangeHeight.DrawItem("-1", ITEMDRAW_CONTROL);
+    pChangeHeight.DrawItem("-0.1", ITEMDRAW_CONTROL);
+    pChangeHeight.Send(client, PanelHandler_ChangeHeight, MENU_TIME_FOREVER);
+}
+
+public int PanelHandler_ChangeHeight(Menu menu, MenuAction action, int client, int choice)
+{
+
+    if(action == MenuAction_Select)
+    {
+        switch (choice)
+        {
+            case 1:
+            {
+                g_iPlayer[client].Vector2 += 100;
+            }
+            case 2:
+            {
+                g_iPlayer[client].Vector2 += 10;
+            }
+            case 3:
+            {
+                g_iPlayer[client].Vector2 += 1;
+            }
+            case 4:
+            {
+                g_iPlayer[client].Vector2 += 0.1;
+            }
+            case 6:
+            {
+                g_iPlayer[client].Vector2 -= 100;
+            }
+            case 7:
+            {
+                g_iPlayer[client].Vector2 -= 10;
+            }
+            case 8:
+            {
+                g_iPlayer[client].Vector2 -= 1;
+            }
+            case 9:
+            {
+                g_iPlayer[client].Vector2 -= 0.1;
+            }
+        }
+        MainHeightPanel(client);
+    }
+    
+}
+
+void ResetClient(int client){
+    g_iPlayer[client].active = false;
+    g_iPlayer[client].EntityRotation = 0;
+    g_iPlayer[client].ClientsFakeEntity = 0;
 }
